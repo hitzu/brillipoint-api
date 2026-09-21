@@ -4,7 +4,6 @@ import { AppDataSource as TestDataSource } from '../../config/database/data-sour
 import { ContractFactory } from '../../../test/factories/contracts/contract.factory';
 import { BookingFactory } from '../../../test/factories/bookings/booking.factory';
 import { BOOKING_STATUS } from '../constants/booking_status.enum';
-import { BOOKING_TYPE } from '../constants/booking_type.enum';
 import { Booking } from './booking.entity';
 
 describe('Booking entity', () => {
@@ -23,7 +22,6 @@ describe('Booking entity', () => {
 
     // Act
     const created = await bookingFactory.create({
-      type: BOOKING_TYPE.INTERNAL,
       title: 'Boda García',
       venueName: 'Salón Jardín',
       eventDate: '2026-09-12',
@@ -35,7 +33,6 @@ describe('Booking entity', () => {
     // Assert
     expect(persisted).not.toBeNull();
     expect(persisted?.status).toBe(BOOKING_STATUS.CONFIRMED);
-    expect(persisted?.type).toBe(BOOKING_TYPE.INTERNAL);
     expect(persisted?.title).toBe('Boda García');
     expect(persisted?.venueName).toBe('Salón Jardín');
     expect(persisted?.eventDate).toBe('2026-09-12');
@@ -48,7 +45,6 @@ describe('Booking entity', () => {
     const sameInstant = new Date('2026-09-12T10:00:00.000Z');
     const invalidBooking = bookingsRepository.create({
       status: BOOKING_STATUS.CONFIRMED,
-      type: BOOKING_TYPE.INTERNAL,
       purpose: null,
       eventDate: '2026-09-12',
       serviceStartsAt: sameInstant,
@@ -67,7 +63,6 @@ describe('Booking entity', () => {
     // Arrange
     const booking = bookingsRepository.create({
       status: BOOKING_STATUS.CONFIRMED,
-      type: BOOKING_TYPE.COMMERCIAL,
       purpose: null,
       eventDate: '2026-09-12',
       serviceStartsAt: new Date('2026-09-12T10:00:00.000Z'),

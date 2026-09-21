@@ -13,7 +13,6 @@ import { BookingsController } from './bookings.controller';
 import { ScheduleAgendaQueryDto } from './dto/schedule-agenda-query.dto';
 import { Booking } from './entities/booking.entity';
 import { BOOKING_STATUS } from './constants/booking_status.enum';
-import { BOOKING_TYPE } from './constants/booking_type.enum';
 
 describe('BookingsAgendaService', () => {
   let service: BookingsAgendaService;
@@ -169,7 +168,6 @@ describe('BookingsAgendaService', () => {
         clientName: 'Jane Doe',
       });
       const booking = await bookingFactory.create({
-        type: BOOKING_TYPE.COMMERCIAL,
         contractId: contract.id,
         eventDate: '2026-09-15',
         serviceStartsAt: new Date('2026-09-15T14:00:00-06:00'),
@@ -375,7 +373,6 @@ describe('BookingsAgendaService', () => {
         clientName: 'Secret Client',
       });
       await bookingFactory.create({
-        type: BOOKING_TYPE.COMMERCIAL,
         contractId: contract.id,
         title: 'Secret Title',
         venueName: 'Secret Venue',

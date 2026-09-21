@@ -1,11 +1,11 @@
 meta {
-  name: create internal booking (overnight)
+  name: create booking (overnight)
   type: http
   seq: 2
 }
 
 post {
-  url: {{base_url}}/bookings/internal
+  url: {{base_url}}/bookings
   body: json
   auth: inherit
 }

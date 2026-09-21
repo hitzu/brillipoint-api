@@ -44,10 +44,6 @@ import {
   Promotion,
   PROMOTION_TYPE,
 } from '../promotions/entities/promotion.entity';
-import { Booking } from '../bookings/entities/booking.entity';
-import { BOOKING_PURPOSE } from '../bookings/constants/booking_purpose.enum';
-import { BOOKING_STATUS } from '../bookings/constants/booking_status.enum';
-import { BOOKING_TYPE } from '../bookings/constants/booking_type.enum';
 
 interface RecalculateTotalsRepos {
   contractPackagesRepo: Repository<ContractPackage>;
@@ -123,32 +119,6 @@ export class ContractsService {
 
   async createContract(dto: CreateContractFromSlotsDto): Promise<ContractDto> {
     const hasSlotId = dto.slotId !== undefined && dto.slotId !== null;
-    /**
-     * `null` must be treated exactly like `undefined` here: `@IsOptional()`
-     * skips validation for both, and `@Type(() => Date)` leaves an explicit
-     * `null` as `null` instead of coercing it. Testing only for `undefined`
-     * would let a payload with explicit nulls reach `serviceEndsAt!.getTime()`
-     * and raise a TypeError (HTTP 500) instead of the intended 400.
-     */
-    const hasSchedule =
-      dto.eventDate != null &&
-      dto.serviceStartsAt != null &&
-      dto.serviceEndsAt != null;
-
-    if (!hasSlotId && !hasSchedule) {
-      throw new BadRequestException(
-        'Either slotId or a schedule (eventDate, serviceStartsAt, serviceEndsAt) is required',
-      );
-    }
-
-    if (
-      hasSchedule &&
-      dto.serviceEndsAt!.getTime() <= dto.serviceStartsAt!.getTime()
-    ) {
-      throw new BadRequestException(
-        'serviceEndsAt must be after serviceStartsAt',
-      );
-    }
 
     let slot: Slot | null = null;
     if (hasSlotId) {
@@ -207,23 +177,6 @@ export class ContractsService {
           slot,
         });
         const savedContract = await contractsRepo.save(contract);
-
-        if (hasSchedule) {
-          const bookingsRepo = manager.getRepository(Booking);
-          const booking = bookingsRepo.create({
-            status: BOOKING_STATUS.CONFIRMED,
-            type: BOOKING_TYPE.COMMERCIAL,
-            purpose: BOOKING_PURPOSE.EVENT,
-            contractId: savedContract.id,
-            eventDate: dto.eventDate!,
-            serviceStartsAt: dto.serviceStartsAt!,
-            serviceEndsAt: dto.serviceEndsAt!,
-            title: dto.title ?? null,
-            venueName: dto.venueName ?? null,
-            mapsUrl: dto.mapsUrl ?? null,
-          });
-          await bookingsRepo.save(booking);
-        }
 
         const {
           packagesByClientRef,

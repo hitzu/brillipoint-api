@@ -30,7 +30,7 @@ import { BookingsService } from './bookings.service';
 import { BookingCalendarQueryDto } from './dto/booking-calendar-query.dto';
 import { BookingCalendarResponseDto } from './dto/booking-calendar.dto';
 import { BookingDetailDto } from './dto/booking-detail.dto';
-import { CreateInternalBookingDto } from './dto/create-internal-booking.dto';
+import { CreateBookingDto } from './dto/create-booking.dto';
 import { RescheduleBookingDto } from './dto/reschedule-booking.dto';
 import { ScheduleAgendaQueryDto } from './dto/schedule-agenda-query.dto';
 import { ScheduleAgendaResponseDto } from './dto/schedule-agenda.dto';
@@ -44,19 +44,22 @@ export class BookingsController {
     private readonly bookingsAgendaService: BookingsAgendaService,
   ) {}
 
-  @Post('internal')
-  @ApiOperation({ summary: 'Create an internal booking' })
-  @ApiBody({ type: CreateInternalBookingDto })
+  @Post()
+  @ApiOperation({ summary: 'Create a booking' })
+  @ApiBody({ type: CreateBookingDto })
   @ApiCreatedResponse({
     description: 'Booking created successfully',
     type: BookingDetailDto,
   })
   @ApiBadRequestResponse({ description: 'Invalid request body' })
-  createInternal(
+  @ApiNotFoundResponse({
+    description: EXCEPTION_RESPONSE.CONTRACT_NOT_FOUND.message,
+  })
+  create(
     @Body(new ValidationPipe({ transform: true, whitelist: true }))
-    createInternalBookingDto: CreateInternalBookingDto,
+    createBookingDto: CreateBookingDto,
   ) {
-    return this.bookingsService.createInternal(createInternalBookingDto);
+    return this.bookingsService.create(createBookingDto);
   }
 
   // Declared before `@Get(':id')`: Nest matches routes in declaration

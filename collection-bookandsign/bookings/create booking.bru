@@ -1,11 +1,11 @@
 meta {
-  name: create internal booking
+  name: create booking
   type: http
   seq: 1
 }
 
 post {
-  url: {{base_url}}/bookings/internal
+  url: {{base_url}}/bookings
   body: json
   auth: inherit
 }
@@ -32,11 +32,11 @@ vars:post-response {
 }
 
 tests {
-  test("creates the internal booking", function () {
+  test("creates the booking", function () {
     expect(res.getStatus()).to.equal(201);
   });
 
-  test("is a confirmed internal booking with no contract", function () {
+  test("is a confirmed booking with no contract", function () {
     const booking = res.getBody();
     expect(booking.status).to.equal("confirmed");
     expect(booking.contract).to.equal(null);

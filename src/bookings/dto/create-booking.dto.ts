@@ -4,6 +4,7 @@ import {
   Equals,
   IsDate,
   IsEnum,
+  IsInt,
   IsOptional,
   IsString,
   IsUrl,
@@ -11,7 +12,7 @@ import {
 } from 'class-validator';
 import { BOOKING_PURPOSE } from '../constants/booking_purpose.enum';
 
-export class CreateInternalBookingDto {
+export class CreateBookingDto {
   @ApiProperty({ type: String, enum: ['exact'], required: true })
   @Equals('exact', { message: 'scheduleType must be "exact"' })
   scheduleType!: 'exact';
@@ -66,4 +67,12 @@ export class CreateInternalBookingDto {
   @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
   @IsOptional()
   mapsUrl?: string;
+
+  @ApiPropertyOptional({
+    type: Number,
+    description: 'Contract this booking belongs to, when it has one',
+  })
+  @IsInt()
+  @IsOptional()
+  contractId?: number;
 }

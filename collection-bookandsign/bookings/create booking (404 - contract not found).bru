@@ -1,0 +1,37 @@
+meta {
+  name: create booking (404 - contract not found)
+  type: http
+  seq: 19
+}
+
+post {
+  url: {{base_url}}/bookings
+  body: json
+  auth: inherit
+}
+
+headers {
+  authorization: Bearer {{token}}
+}
+
+body:json {
+  {
+    "scheduleType": "exact",
+    "eventDate": "2026-11-03",
+    "serviceStartsAt": "2026-11-03T14:00:00-06:00",
+    "serviceEndsAt": "2026-11-03T18:00:00-06:00",
+    "purpose": "scouting",
+    "contractId": 999999999
+  }
+}
+
+tests {
+  test("returns 404 when the contract does not exist", function () {
+    expect(res.getStatus()).to.equal(404);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

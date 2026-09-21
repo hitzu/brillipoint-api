@@ -41,6 +41,7 @@ enum ErrorMessages {
   REQUIRED_SOURCE = 'REQUIRED_SOURCE',
   SESSION_ID_REQUIRED = 'SESSION_ID_REQUIRED',
   BOOKING_NOT_FOUND = 'BOOKING_NOT_FOUND',
+  CONTRACT_NOT_FOUND = 'CONTRACT_NOT_FOUND',
 }
 
 export const EXCEPTION_RESPONSE: Record<
@@ -215,5 +216,9 @@ export const EXCEPTION_RESPONSE: Record<
   [ErrorMessages.BOOKING_NOT_FOUND]: {
     code: 42,
     message: 'booking not found',
+  },
+  [ErrorMessages.CONTRACT_NOT_FOUND]: {
+    code: 43,
+    message: 'contract not found',
   },
 };

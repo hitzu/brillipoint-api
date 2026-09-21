@@ -44,7 +44,7 @@ type ValidatedRange = {
  * Read side of the staff agenda (`GET /bookings/agenda`, endpoint #1 in
  * `odd/tasks/booking-agenda.md`). Kept out of `BookingsService`: this is a
  * read/projection concern over the bookings table, distinct from the
- * write-side use cases (`createInternal`, `reschedule`) that service owns.
+ * write-side use cases (`create`, `reschedule`) that service owns.
  *
  * There are no holds or blocks in this slice, so every booking already
  * carries an exact `serviceStartsAt`/`serviceEndsAt` and can be queried by
@@ -135,7 +135,6 @@ export class BookingsAgendaService {
       id: booking.id,
       date: segment.date,
       status: booking.status,
-      type: booking.type,
       purpose: booking.purpose,
       startsAt: segment.startsAt,
       endsAt: segment.endsAt,

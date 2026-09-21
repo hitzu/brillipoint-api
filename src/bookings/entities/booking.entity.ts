@@ -4,7 +4,6 @@ import { BaseTimeEntity } from '../../common/entities/base-time.entity';
 import { Contract } from '../../contracts/entities/contract.entity';
 import { BOOKING_PURPOSE } from '../constants/booking_purpose.enum';
 import { BOOKING_STATUS } from '../constants/booking_status.enum';
-import { BOOKING_TYPE } from '../constants/booking_type.enum';
 
 /**
  * Every booking in this slice is an exact hour range (no holds, see
@@ -18,9 +17,6 @@ export const BOOKING_SERVICE_RANGE_CHECK = 'service_ends_at > service_starts_at'
 export class Booking extends BaseTimeEntity {
   @Column('enum', { enum: BOOKING_STATUS, default: BOOKING_STATUS.CONFIRMED })
   status: BOOKING_STATUS = BOOKING_STATUS.CONFIRMED;
-
-  @Column('enum', { enum: BOOKING_TYPE })
-  type!: BOOKING_TYPE;
 
   /** Which of the contract's dated commitments this booking is, when it has a contract. */
   @Column('enum', { enum: BOOKING_PURPOSE, nullable: true })

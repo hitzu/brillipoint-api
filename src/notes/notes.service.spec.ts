@@ -7,6 +7,7 @@ import { EXCEPTION_RESPONSE } from '../config/errors/exception-response.config';
 import { Slot } from '../slots/entities/slot.entity';
 import { SlotFactory } from '../../test/factories/slots/slot.factory';
 import { Booking } from '../bookings/entities/booking.entity';
+import { Contract } from '../contracts/entities/contract.entity';
 import { BookingFactory } from '../../test/factories/bookings/booking.factory';
 import { BookingsService } from '../bookings/bookings.service';
 import { CreateNoteDto } from './dto/create-note.dto';
@@ -58,6 +59,12 @@ describe('NotesService', () => {
         {
           provide: getRepositoryToken(Booking),
           useValue: TestDataSource.getRepository(Booking),
+        },
+        // `BookingsService` resolves a booking's contract when one is given,
+        // so the real collaborator needs the contract repository too.
+        {
+          provide: getRepositoryToken(Contract),
+          useValue: TestDataSource.getRepository(Contract),
         },
       ],
     }).compile();

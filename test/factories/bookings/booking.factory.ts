@@ -5,7 +5,6 @@ import type { DataSource } from 'typeorm';
 
 import { Booking } from '../../../src/bookings/entities/booking.entity';
 import { BOOKING_STATUS } from '../../../src/bookings/constants/booking_status.enum';
-import { BOOKING_TYPE } from '../../../src/bookings/constants/booking_type.enum';
 
 export class BookingFactory extends Factory<Booking> {
   protected entity = Booking;
@@ -19,7 +18,6 @@ export class BookingFactory extends Factory<Booking> {
   protected attrs(): FactorizedAttrs<Booking> {
     return {
       status: BOOKING_STATUS.CONFIRMED,
-      type: BOOKING_TYPE.INTERNAL,
       purpose: null,
       eventDate: '2026-09-12',
       serviceStartsAt: new Date('2026-09-12T10:00:00.000Z'),

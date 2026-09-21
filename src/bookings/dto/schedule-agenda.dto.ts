@@ -3,7 +3,6 @@ import { Type } from 'class-transformer';
 
 import { BOOKING_PURPOSE } from '../constants/booking_purpose.enum';
 import { BOOKING_STATUS } from '../constants/booking_status.enum';
-import { BOOKING_TYPE } from '../constants/booking_type.enum';
 
 /**
  * One calendar day's slice of a booking. A booking that crosses local
@@ -22,9 +21,6 @@ export class ScheduleAgendaEntryDto {
 
   @ApiProperty({ enum: BOOKING_STATUS })
   status!: BOOKING_STATUS;
-
-  @ApiProperty({ enum: BOOKING_TYPE })
-  type!: BOOKING_TYPE;
 
   @ApiPropertyOptional({ enum: BOOKING_PURPOSE, nullable: true })
   purpose!: BOOKING_PURPOSE | null;

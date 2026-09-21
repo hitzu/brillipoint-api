@@ -5,20 +5,21 @@ import { Repository } from 'typeorm';
 
 import { AppDataSource as TestDataSource } from '../config/database/data-source';
 import { EXCEPTION_RESPONSE } from '../config/errors/exception-response.config';
+import { Contract } from '../contracts/entities/contract.entity';
 import { ContractFactory } from '../../test/factories/contracts/contract.factory';
 import { BookingFactory } from '../../test/factories/bookings/booking.factory';
 import { BookingsService } from './bookings.service';
-import { CreateInternalBookingDto } from './dto/create-internal-booking.dto';
+import { CreateBookingDto } from './dto/create-booking.dto';
 import { RescheduleBookingDto } from './dto/reschedule-booking.dto';
 import { Booking } from './entities/booking.entity';
 import { BOOKING_PURPOSE } from './constants/booking_purpose.enum';
 import { BOOKING_STATUS } from './constants/booking_status.enum';
-import { BOOKING_TYPE } from './constants/booking_type.enum';
 
 describe('BookingsService', () => {
   let service: BookingsService;
   let bookingsRepository: Repository<Booking>;
   let bookingFactory: BookingFactory;
+  let contractFactory: ContractFactory;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -28,6 +29,10 @@ describe('BookingsService', () => {
           provide: getRepositoryToken(Booking),
           useValue: TestDataSource.getRepository(Booking),
         },
+        {
+          provide: getRepositoryToken(Contract),
+          useValue: TestDataSource.getRepository(Contract),
+        },
       ],
     }).compile();
 
@@ -36,9 +41,10 @@ describe('BookingsService', () => {
       getRepositoryToken(Booking),
     );
     bookingFactory = new BookingFactory(TestDataSource);
+    contractFactory = new ContractFactory(TestDataSource);
   });
 
-  const baseDto = (): CreateInternalBookingDto => ({
+  const baseDto = (): CreateBookingDto => ({
     scheduleType: 'exact',
     eventDate: '2026-10-01',
     serviceStartsAt: new Date('2026-10-01T14:00:00.000Z'),
@@ -49,13 +55,13 @@ describe('BookingsService', () => {
     mapsUrl: 'https://maps.example.com/venue',
   });
 
-  describe('createInternal', () => {
-    it('creates a confirmed internal booking with no contract', async () => {
+  describe('create', () => {
+    it('creates a confirmed booking with no contract when contractId is omitted', async () => {
       // Arrange
       const dto = baseDto();
 
       // Act
-      const result = await service.createInternal(dto);
+      const result = await service.create(dto);
 
       // Assert
       expect(result.id).toBeDefined();
@@ -70,20 +76,79 @@ describe('BookingsService', () => {
       expect(result.contract).toBeNull();
 
       const persisted = await bookingsRepository.findOneBy({ id: result.id });
-      expect(persisted?.type).toBe(BOOKING_TYPE.INTERNAL);
       expect(persisted?.contractId).toBeNull();
+    });
+
+    it('persists contractId when the payload carries one', async () => {
+      // Arrange
+      const contract = await contractFactory.create();
+      const dto: CreateBookingDto = { ...baseDto(), contractId: contract.id };
+
+      // Act
+      const result = await service.create(dto);
+
+      // Assert
+      const persisted = await bookingsRepository.findOneBy({ id: result.id });
+      expect(persisted?.contractId).toBe(contract.id);
+    });
+
+    it('returns the contract summary in the created booking', async () => {
+      // Arrange
+      const contract = await contractFactory.create();
+      const dto: CreateBookingDto = { ...baseDto(), contractId: contract.id };
+
+      // Act
+      const result = await service.create(dto);
+
+      // Assert
+      expect(result.contract).toEqual({
+        sku: contract.sku,
+        token: contract.token,
+      });
+    });
+
+    it('throws NotFoundException when contractId points at no contract', async () => {
+      // Arrange
+      const dto: CreateBookingDto = { ...baseDto(), contractId: 999999 };
+
+      // Act + Assert
+      await expect(service.create(dto)).rejects.toEqual(
+        new NotFoundException(EXCEPTION_RESPONSE.CONTRACT_NOT_FOUND),
+      );
+    });
+
+    it('accepts a second booking on the same contract with a different purpose', async () => {
+      // Arrange
+      const contract = await contractFactory.create();
+      const eventDto: CreateBookingDto = {
+        ...baseDto(),
+        contractId: contract.id,
+        purpose: BOOKING_PURPOSE.EVENT,
+      };
+      await service.create(eventDto);
+      const scoutingDto: CreateBookingDto = {
+        ...baseDto(),
+        contractId: contract.id,
+        purpose: BOOKING_PURPOSE.SCOUTING,
+      };
+
+      // Act
+      const result = await service.create(scoutingDto);
+
+      // Assert
+      expect(result.purpose).toBe(BOOKING_PURPOSE.SCOUTING);
     });
 
     it('creates an overnight booking whose serviceEndsAt falls on the next civil day', async () => {
       // Arrange
-      const dto: CreateInternalBookingDto = {
+      const dto: CreateBookingDto = {
         ...baseDto(),
         serviceStartsAt: new Date('2026-10-01T22:00:00.000Z'),
         serviceEndsAt: new Date('2026-10-02T02:00:00.000Z'),
       };
 
       // Act
-      const result = await service.createInternal(dto);
+      const result = await service.create(dto);
 
       // Assert
       expect(result.serviceStartsAt.toISOString()).toBe(
@@ -97,14 +162,14 @@ describe('BookingsService', () => {
     it('rejects when serviceEndsAt is not after serviceStartsAt', async () => {
       // Arrange
       const sameInstant = new Date('2026-10-01T14:00:00.000Z');
-      const dto: CreateInternalBookingDto = {
+      const dto: CreateBookingDto = {
         ...baseDto(),
         serviceStartsAt: sameInstant,
         serviceEndsAt: sameInstant,
       };
 
       // Act + Assert
-      await expect(service.createInternal(dto)).rejects.toBeInstanceOf(
+      await expect(service.create(dto)).rejects.toBeInstanceOf(
         BadRequestException,
       );
     });
@@ -114,23 +179,23 @@ describe('BookingsService', () => {
       const dto = {
         ...baseDto(),
         scheduleType: 'approximate',
-      } as unknown as CreateInternalBookingDto;
+      } as unknown as CreateBookingDto;
 
       // Act + Assert
-      await expect(service.createInternal(dto)).rejects.toBeInstanceOf(
+      await expect(service.create(dto)).rejects.toBeInstanceOf(
         BadRequestException,
       );
     });
 
     it('rejects when mapsUrl is not http/https', async () => {
       // Arrange
-      const dto: CreateInternalBookingDto = {
+      const dto: CreateBookingDto = {
         ...baseDto(),
         mapsUrl: 'ftp://maps.example.com/venue',
       };
 
       // Act + Assert
-      await expect(service.createInternal(dto)).rejects.toBeInstanceOf(
+      await expect(service.create(dto)).rejects.toBeInstanceOf(
         BadRequestException,
       );
     });
@@ -141,7 +206,6 @@ describe('BookingsService', () => {
       // Arrange
       const contract = await new ContractFactory(TestDataSource).create();
       const booking = await bookingFactory.create({
-        type: BOOKING_TYPE.COMMERCIAL,
         contractId: contract.id,
       });
 
@@ -155,10 +219,9 @@ describe('BookingsService', () => {
       });
     });
 
-    it('returns contract: null for an internal booking', async () => {
+    it('returns contract: null for a booking with no contract', async () => {
       // Arrange
       const booking = await bookingFactory.create({
-        type: BOOKING_TYPE.INTERNAL,
         contractId: null,
       });
 
@@ -249,11 +312,10 @@ describe('BookingsService', () => {
       );
     });
 
-    it('keeps type, status and contractId for a contract-linked booking and still returns the contract', async () => {
+    it('keeps status and contractId for a contract-linked booking and still returns the contract', async () => {
       // Arrange
       const contract = await new ContractFactory(TestDataSource).create();
       const booking = await bookingFactory.create({
-        type: BOOKING_TYPE.COMMERCIAL,
         contractId: contract.id,
       });
       const dto = rescheduleDto();
@@ -268,7 +330,6 @@ describe('BookingsService', () => {
       });
 
       const persisted = await bookingsRepository.findOneBy({ id: booking.id });
-      expect(persisted?.type).toBe(BOOKING_TYPE.COMMERCIAL);
       expect(persisted?.status).toBe(BOOKING_STATUS.CONFIRMED);
       expect(persisted?.contractId).toBe(contract.id);
     });
