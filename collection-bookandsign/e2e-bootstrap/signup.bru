@@ -1,0 +1,55 @@
+meta {
+  name: signup (e2e runner)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/auth/signup
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "role": "sales_agent",
+    "firstName": "E2E",
+    "lastName": "Runner",
+    "email": "{{e2e_email}}",
+    "password": "{{e2e_password}}",
+    "phone": "5555550100"
+  }
+}
+
+script:pre-request {
+  // Every Bruno e2e run needs its own staff user so repeated runs (locally,
+  // or across CI jobs sharing a database) never collide on a unique email.
+  // Nothing here is a real credential: it is generated fresh, used only to
+  // obtain an access token for this run, and never committed.
+  const runId = `${Date.now()}-${Math.floor(Math.random() * 1e8)}`;
+  bru.setVar('e2e_email', `e2e.${runId}@example.com`);
+  bru.setVar('e2e_password', `E2e-${runId}!Aa`);
+}
+
+vars:post-response {
+  token: res.body.accessAndRefreshToken.accessToken
+}
+
+tests {
+  test("creates the throwaway e2e staff user", function () {
+    expect(res.getStatus()).to.equal(201);
+  });
+
+  test("returns an access token usable by the staff routes below", function () {
+    const body = res.getBody();
+    expect(body.accessAndRefreshToken).to.have.property("accessToken");
+    expect(body.accessAndRefreshToken.accessToken).to.be.a("string");
+    expect(body.accessAndRefreshToken.accessToken.length).to.be.above(0);
+    expect(body.userInfo.role).to.equal("sales_agent");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

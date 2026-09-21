@@ -1,0 +1,72 @@
+meta {
+  name: get bookings agenda (overnight booking spans two days)
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{base_url}}/bookings/agenda?from=2026-12-22&to=2026-12-23
+  body: none
+  auth: inherit
+}
+
+params:query {
+  from: 2026-12-22
+  to: 2026-12-23
+}
+
+headers {
+  authorization: Bearer {{token}}
+}
+
+tests {
+  test("returns the two day range", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().days.length).to.equal(2);
+  });
+
+  test("splits the overnight booking into exactly two segments", function () {
+    const id = Number(bru.getVar("agenda_overnight_booking_id"));
+    const segments = [];
+    res.getBody().days.forEach(function (day) {
+      day.entries.forEach(function (entry) {
+        if (entry.id === id) segments.push(entry);
+      });
+    });
+    expect(segments.length).to.equal(2);
+    expect(segments[0].date).to.equal("2026-12-22");
+    expect(segments[1].date).to.equal("2026-12-23");
+  });
+
+  test("flags the continuation on both sides of midnight", function () {
+    const id = Number(bru.getVar("agenda_overnight_booking_id"));
+    const segments = [];
+    res.getBody().days.forEach(function (day) {
+      day.entries.forEach(function (entry) {
+        if (entry.id === id) segments.push(entry);
+      });
+    });
+    expect(segments[0].continuesFromPreviousDay).to.equal(false);
+    expect(segments[0].continuesNextDay).to.equal(true);
+    expect(segments[1].continuesFromPreviousDay).to.equal(true);
+    expect(segments[1].continuesNextDay).to.equal(false);
+  });
+
+  test("repeats the same full interval on both segments", function () {
+    const id = Number(bru.getVar("agenda_overnight_booking_id"));
+    const segments = [];
+    res.getBody().days.forEach(function (day) {
+      day.entries.forEach(function (entry) {
+        if (entry.id === id) segments.push(entry);
+      });
+    });
+    expect(segments[0].startsAt).to.equal(segments[1].startsAt);
+    expect(segments[0].endsAt).to.equal(segments[1].endsAt);
+    expect(segments[0].segmentEndsAt).to.equal(segments[1].segmentStartsAt);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

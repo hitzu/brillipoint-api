@@ -1,0 +1,54 @@
+meta {
+  name: get bookings calendar (one month)
+  type: http
+  seq: 16
+}
+
+get {
+  url: {{base_url}}/bookings/calendar?year=2026&month=9
+  body: none
+  auth: none
+}
+
+params:query {
+  year: 2026
+  month: 9
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+tests {
+  test("is public: no auth header sent, still returns 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("returns every civil day of September (30)", function () {
+    const days = res.getBody().days;
+    expect(days.length).to.equal(30);
+    expect(days[0].date).to.equal("2026-09-01");
+    expect(days[29].date).to.equal("2026-09-30");
+  });
+
+  test("entries never expose id, contract, client or title fields", function () {
+    const days = res.getBody().days;
+    days.forEach(function (day) {
+      day.entries.forEach(function (entry) {
+        expect(entry).to.not.have.property("id");
+        expect(entry).to.not.have.property("contractId");
+        expect(entry).to.not.have.property("sku");
+        expect(entry).to.not.have.property("clientName");
+        expect(entry).to.not.have.property("title");
+        expect(entry).to.not.have.property("venueName");
+        expect(entry).to.have.property("segmentStartsAt");
+        expect(entry).to.have.property("segmentEndsAt");
+        expect(entry).to.have.property("startsAt");
+        expect(entry).to.have.property("endsAt");
+        expect(entry).to.have.property("continuesFromPreviousDay");
+        expect(entry).to.have.property("continuesNextDay");
+      });
+    });
+  });
+}

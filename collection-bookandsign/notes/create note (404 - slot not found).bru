@@ -23,6 +23,12 @@ body:json {
   }
 }
 
+tests {
+  test("rejects the note with 404 when the slot does not exist", function () {
+    expect(res.getStatus()).to.equal(404);
+  });
+}
+
 settings {
   encodeUrl: true
   timeout: 0

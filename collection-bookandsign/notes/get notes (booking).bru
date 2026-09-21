@@ -1,0 +1,39 @@
+meta {
+  name: get notes (booking)
+  type: http
+  seq: 18
+}
+
+get {
+  url: {{base_url}}/notes/booking/{{booking_id}}?kind=internal
+  body: json
+  auth: inherit
+}
+
+params:query {
+  kind: internal
+}
+
+headers {
+  Authorization: Bearer {{token}}
+}
+
+tests {
+  test("returns the booking's internal notes", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("only returns booking-scoped notes", function () {
+    const notes = res.getBody();
+    expect(notes).to.be.an("array");
+    notes.forEach((note) => {
+      expect(note.scope).to.equal("booking");
+      expect(note.kind).to.equal("internal");
+    });
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

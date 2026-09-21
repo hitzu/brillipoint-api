@@ -1,0 +1,32 @@
+meta {
+  name: get bookings agenda (400 - from after to)
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{base_url}}/bookings/agenda?from=2026-12-20&to=2026-12-14
+  body: none
+  auth: inherit
+}
+
+params:query {
+  from: 2026-12-20
+  to: 2026-12-14
+}
+
+headers {
+  authorization: Bearer {{token}}
+}
+
+tests {
+  test("rejects a range that closes before it opens", function () {
+    expect(res.getStatus()).to.equal(400);
+    expect(res.getBody().message).to.equal("from must not be after to");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

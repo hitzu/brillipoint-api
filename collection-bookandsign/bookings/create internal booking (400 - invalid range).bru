@@ -1,0 +1,36 @@
+meta {
+  name: create internal booking (400 - invalid range)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/bookings/internal
+  body: json
+  auth: inherit
+}
+
+headers {
+  authorization: Bearer {{token}}
+}
+
+body:json {
+  {
+    "scheduleType": "exact",
+    "eventDate": "2026-11-01",
+    "serviceStartsAt": "2026-11-01T18:00:00-06:00",
+    "serviceEndsAt": "2026-11-01T18:00:00-06:00",
+    "title": "Should fail because serviceEndsAt is not after serviceStartsAt"
+  }
+}
+
+tests {
+  test("rejects with 400", function () {
+    expect(res.getStatus()).to.equal(400);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

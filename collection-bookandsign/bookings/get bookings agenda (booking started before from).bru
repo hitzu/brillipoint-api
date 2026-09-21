@@ -1,0 +1,49 @@
+meta {
+  name: get bookings agenda (booking started before from)
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{base_url}}/bookings/agenda?from=2026-12-23&to=2026-12-23
+  body: none
+  auth: inherit
+}
+
+params:query {
+  from: 2026-12-23
+  to: 2026-12-23
+}
+
+headers {
+  authorization: Bearer {{token}}
+}
+
+tests {
+  test("returns the single day range", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().days.length).to.equal(1);
+  });
+
+  test("still serves a booking that started before the range opened", function () {
+    const id = Number(bru.getVar("agenda_overnight_booking_id"));
+    const entry = res.getBody().days[0].entries.find(function (e) { return e.id === id; });
+    expect(entry, "overnight booking reaches into the range").to.not.equal(undefined);
+    expect(entry.continuesFromPreviousDay).to.equal(true);
+    expect(entry.continuesNextDay).to.equal(false);
+  });
+
+  test("clips the segment to the range while keeping the real start", function () {
+    const id = Number(bru.getVar("agenda_overnight_booking_id"));
+    const entry = res.getBody().days[0].entries.find(function (e) { return e.id === id; });
+    expect(new Date(entry.startsAt).getTime()).to.be.below(
+      new Date(entry.segmentStartsAt).getTime(),
+    );
+    expect(entry.status).to.equal("confirmed");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

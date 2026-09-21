@@ -23,6 +23,12 @@ body:json {
   }
 }
 
+tests {
+  test("rejects an unknown note scope with 400", function () {
+    expect(res.getStatus()).to.equal(400);
+  });
+}
+
 settings {
   encodeUrl: true
   timeout: 0

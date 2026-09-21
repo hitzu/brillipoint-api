@@ -22,6 +22,12 @@ body:json {
   }
 }
 
+tests {
+  test("rejects a note with no content with 400", function () {
+    expect(res.getStatus()).to.equal(400);
+  });
+}
+
 settings {
   encodeUrl: true
   timeout: 0

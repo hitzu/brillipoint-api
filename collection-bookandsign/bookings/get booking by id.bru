@@ -1,0 +1,40 @@
+meta {
+  name: get booking by id
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{base_url}}/bookings/:booking_id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  booking_id: {{booking_id}}
+}
+
+headers {
+  authorization: Bearer {{token}}
+}
+
+tests {
+  test("returns the booking detail", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("has the BookingDetail shape", function () {
+    const booking = res.getBody();
+    expect(booking).to.have.property("id");
+    expect(booking).to.have.property("status");
+    expect(booking).to.have.property("eventDate");
+    expect(booking).to.have.property("serviceStartsAt");
+    expect(booking).to.have.property("serviceEndsAt");
+    expect(booking).to.have.property("contract");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

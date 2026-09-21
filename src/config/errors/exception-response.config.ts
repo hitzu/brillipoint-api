@@ -40,6 +40,7 @@ enum ErrorMessages {
   EVENT_EXPIRED = 'EVENT_EXPIRED',
   REQUIRED_SOURCE = 'REQUIRED_SOURCE',
   SESSION_ID_REQUIRED = 'SESSION_ID_REQUIRED',
+  BOOKING_NOT_FOUND = 'BOOKING_NOT_FOUND',
 }
 
 export const EXCEPTION_RESPONSE: Record<
@@ -210,5 +211,9 @@ export const EXCEPTION_RESPONSE: Record<
   [ErrorMessages.SESSION_ID_REQUIRED]: {
     code: 38,
     message: 'sessionId is required for this event',
+  },
+  [ErrorMessages.BOOKING_NOT_FOUND]: {
+    code: 42,
+    message: 'booking not found',
   },
 };

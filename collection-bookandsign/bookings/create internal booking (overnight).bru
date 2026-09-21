@@ -1,0 +1,50 @@
+meta {
+  name: create internal booking (overnight)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/bookings/internal
+  body: json
+  auth: inherit
+}
+
+headers {
+  authorization: Bearer {{token}}
+}
+
+body:json {
+  {
+    "scheduleType": "exact",
+    "eventDate": "2026-11-02",
+    "serviceStartsAt": "2026-11-02T22:00:00-06:00",
+    "serviceEndsAt": "2026-11-03T02:00:00-06:00",
+    "title": "Overnight wedding",
+    "venueName": "Garden salon"
+  }
+}
+
+tests {
+  test("creates the overnight booking", function () {
+    expect(res.getStatus()).to.equal(201);
+  });
+
+  test("spans midnight: eventDate stays the civil start day, the UTC instants are 4h apart", function () {
+    // serviceStartsAt/serviceEndsAt are UTC instants (see odd/tasks/booking-agenda.md
+    // scope decisions), so they serialize with a "Z" offset, not the request's local
+    // -06:00 offset. A substring check for the local civil date does not apply here;
+    // assert the actual contract instead: the instant ordering and duration.
+    const booking = res.getBody();
+    expect(booking.eventDate).to.equal("2026-11-02");
+    const startsAt = new Date(booking.serviceStartsAt).getTime();
+    const endsAt = new Date(booking.serviceEndsAt).getTime();
+    expect(endsAt).to.be.above(startsAt);
+    expect((endsAt - startsAt) / (1000 * 60 * 60)).to.equal(4);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

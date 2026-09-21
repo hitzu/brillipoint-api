@@ -1,0 +1,41 @@
+meta {
+  name: create note (booking)
+  type: http
+  seq: 17
+}
+
+post {
+  url: {{base_url}}/notes
+  body: json
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{token}}
+}
+
+body:json {
+  {
+    "scope": "booking",
+    "targetId": {{booking_id}},
+    "kind": "internal",
+    "content": "Called client to confirm venue access"
+  }
+}
+
+tests {
+  test("creates the booking note", function () {
+    expect(res.getStatus()).to.equal(201);
+  });
+
+  test("has the booking scope", function () {
+    const note = res.getBody();
+    expect(note.scope).to.equal("booking");
+    expect(note.kind).to.equal("internal");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

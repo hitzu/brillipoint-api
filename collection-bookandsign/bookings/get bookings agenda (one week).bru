@@ -1,0 +1,54 @@
+meta {
+  name: get bookings agenda (one week)
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{base_url}}/bookings/agenda?from=2026-12-14&to=2026-12-20
+  body: none
+  auth: inherit
+}
+
+params:query {
+  from: 2026-12-14
+  to: 2026-12-20
+}
+
+headers {
+  authorization: Bearer {{token}}
+}
+
+tests {
+  test("returns all seven inclusive days", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().days.length).to.equal(7);
+  });
+
+  test("every day in the range is present, in order, even when empty", function () {
+    const dates = res.getBody().days.map(function (day) { return day.date; });
+    expect(dates).to.eql([
+      "2026-12-14",
+      "2026-12-15",
+      "2026-12-16",
+      "2026-12-17",
+      "2026-12-18",
+      "2026-12-19",
+      "2026-12-20",
+    ]);
+  });
+
+  test("shows the fixture booking on its own day", function () {
+    const day = res.getBody().days.find(function (d) { return d.date === "2026-12-16"; });
+    const id = Number(bru.getVar("agenda_week_booking_id"));
+    const entry = day.entries.find(function (e) { return e.id === id; });
+    expect(entry, "fixture booking is served on its day").to.not.equal(undefined);
+    expect(entry.sku).to.equal(null);
+    expect(entry.clientName).to.equal(null);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

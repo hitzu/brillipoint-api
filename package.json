@@ -17,7 +17,8 @@
     "db:revert": "ts-node ./node_modules/typeorm/cli.js -d src/config/database/data-source.ts migration:revert",
     "db:status": "ts-node ./node_modules/typeorm/cli.js -d src/config/database/data-source.ts migration:show",
     "db:seed:from-production": "ts-node -r tsconfig-paths/register src/database/seeds/seed-from-production.ts",
-    "test:e2e": "NODE_ENV=test jest --config ./test/jest-e2e.json"
+    "test:e2e": "NODE_ENV=test jest --config ./test/jest-e2e.json",
+    "test:e2e:bruno": "bash scripts/run-bruno-e2e.sh"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -58,6 +59,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^22.10.7",
     "@types/supertest": "^6.0.2",
+    "@usebruno/cli": "^4.1.0",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",

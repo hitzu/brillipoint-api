@@ -1,0 +1,27 @@
+meta {
+  name: get bookings agenda (401 - missing token)
+  type: http
+  seq: 18
+}
+
+get {
+  url: {{base_url}}/bookings/agenda?from=2026-12-14&to=2026-12-20
+  body: none
+  auth: none
+}
+
+params:query {
+  from: 2026-12-14
+  to: 2026-12-20
+}
+
+tests {
+  test("rejects the staff agenda route with no Authorization header", function () {
+    expect(res.getStatus()).to.equal(401);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

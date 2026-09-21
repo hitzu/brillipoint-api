@@ -44,6 +44,10 @@ import {
   Promotion,
   PROMOTION_TYPE,
 } from '../promotions/entities/promotion.entity';
+import { Booking } from '../bookings/entities/booking.entity';
+import { BOOKING_PURPOSE } from '../bookings/constants/booking_purpose.enum';
+import { BOOKING_STATUS } from '../bookings/constants/booking_status.enum';
+import { BOOKING_TYPE } from '../bookings/constants/booking_type.enum';
 
 interface RecalculateTotalsRepos {
   contractPackagesRepo: Repository<ContractPackage>;
@@ -118,21 +122,54 @@ export class ContractsService {
   }
 
   async createContract(dto: CreateContractFromSlotsDto): Promise<ContractDto> {
-    const contractSlotValidation = await this.contractSlotsRepository.findOne({
-      where: { slotId: dto.slotId },
-    });
-    if (contractSlotValidation) {
-      throw new ConflictException(EXCEPTION_RESPONSE.SLOT_ALREADY_USED);
+    const hasSlotId = dto.slotId !== undefined && dto.slotId !== null;
+    /**
+     * `null` must be treated exactly like `undefined` here: `@IsOptional()`
+     * skips validation for both, and `@Type(() => Date)` leaves an explicit
+     * `null` as `null` instead of coercing it. Testing only for `undefined`
+     * would let a payload with explicit nulls reach `serviceEndsAt!.getTime()`
+     * and raise a TypeError (HTTP 500) instead of the intended 400.
+     */
+    const hasSchedule =
+      dto.eventDate != null &&
+      dto.serviceStartsAt != null &&
+      dto.serviceEndsAt != null;
+
+    if (!hasSlotId && !hasSchedule) {
+      throw new BadRequestException(
+        'Either slotId or a schedule (eventDate, serviceStartsAt, serviceEndsAt) is required',
+      );
     }
 
-    const slot = await this.slotsRepository.findOne({
-      where: { id: dto.slotId },
-    });
-    if (!slot) {
-      throw new NotFoundException(EXCEPTION_RESPONSE.SLOT_NOT_FOUND);
+    if (
+      hasSchedule &&
+      dto.serviceEndsAt!.getTime() <= dto.serviceStartsAt!.getTime()
+    ) {
+      throw new BadRequestException(
+        'serviceEndsAt must be after serviceStartsAt',
+      );
     }
-    if (slot.status !== SLOT_STATUS.RESERVED) {
-      throw new ConflictException(EXCEPTION_RESPONSE.SLOT_NOT_AVAILABLE);
+
+    let slot: Slot | null = null;
+    if (hasSlotId) {
+      const contractSlotValidation = await this.contractSlotsRepository.findOne(
+        {
+          where: { slotId: dto.slotId },
+        },
+      );
+      if (contractSlotValidation) {
+        throw new ConflictException(EXCEPTION_RESPONSE.SLOT_ALREADY_USED);
+      }
+
+      slot = await this.slotsRepository.findOne({
+        where: { id: dto.slotId },
+      });
+      if (!slot) {
+        throw new NotFoundException(EXCEPTION_RESPONSE.SLOT_NOT_FOUND);
+      }
+      if (slot.status !== SLOT_STATUS.RESERVED) {
+        throw new ConflictException(EXCEPTION_RESPONSE.SLOT_NOT_AVAILABLE);
+      }
     }
 
     const brandId = dto.brandId ?? null;
@@ -170,6 +207,23 @@ export class ContractsService {
           slot,
         });
         const savedContract = await contractsRepo.save(contract);
+
+        if (hasSchedule) {
+          const bookingsRepo = manager.getRepository(Booking);
+          const booking = bookingsRepo.create({
+            status: BOOKING_STATUS.CONFIRMED,
+            type: BOOKING_TYPE.COMMERCIAL,
+            purpose: BOOKING_PURPOSE.EVENT,
+            contractId: savedContract.id,
+            eventDate: dto.eventDate!,
+            serviceStartsAt: dto.serviceStartsAt!,
+            serviceEndsAt: dto.serviceEndsAt!,
+            title: dto.title ?? null,
+            venueName: dto.venueName ?? null,
+            mapsUrl: dto.mapsUrl ?? null,
+          });
+          await bookingsRepo.save(booking);
+        }
 
         const {
           packagesByClientRef,
@@ -210,12 +264,14 @@ export class ContractsService {
           mergedApplied,
         );
 
-        const contractSlot = contractSlotsRepo.create({
-          contractId: savedContract.id,
-          slotId: dto.slotId,
-          purpose: CONTRACT_SLOT_PURPOSE.EVENT,
-        });
-        await contractSlotsRepo.save(contractSlot);
+        if (hasSlotId) {
+          const contractSlot = contractSlotsRepo.create({
+            contractId: savedContract.id,
+            slotId: dto.slotId,
+            purpose: CONTRACT_SLOT_PURPOSE.EVENT,
+          });
+          await contractSlotsRepo.save(contractSlot);
+        }
 
         await this.recalculateTotals(savedContract.id, {
           contractPackagesRepo,

@@ -5,13 +5,23 @@ meta {
 }
 
 get {
-  url: {{base_url}}/notes/slot/999999
+  url: {{base_url}}/notes/slot/999999?kind=internal
   body: json
   auth: inherit
 }
 
+params:query {
+  kind: internal
+}
+
 headers {
   Authorization: Bearer {{token}}
+}
+
+tests {
+  test("returns 404 when the slot does not exist", function () {
+    expect(res.getStatus()).to.equal(404);
+  });
 }
 
 settings {

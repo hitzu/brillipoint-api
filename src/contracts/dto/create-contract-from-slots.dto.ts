@@ -1,9 +1,12 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsDate,
   IsNumber,
   IsOptional,
   IsString,
+  IsUrl,
+  Matches,
   ValidateNested,
 } from 'class-validator';
 import { AddItemDto } from './add-item.dto';
@@ -14,11 +17,46 @@ export class CreateContractFromSlotsDto {
   userId!: number;
 
   @IsNumber()
-  slotId!: number;
+  @IsOptional()
+  slotId?: number;
 
   @IsNumber()
   @IsOptional()
   brandId?: number | null;
+
+  /**
+   * Optional commercial-booking schedule (contract-first path). Field shapes
+   * and validators are copied verbatim from `CreateInternalBookingDto` so
+   * both entry points validate identically. A contract's main commitment is
+   * always `BOOKING_PURPOSE.EVENT`, so no `purpose` is accepted here.
+   */
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'eventDate must be a YYYY-MM-DD date',
+  })
+  @IsOptional()
+  eventDate?: string;
+
+  @Type(() => Date)
+  @IsDate()
+  @IsOptional()
+  serviceStartsAt?: Date;
+
+  @Type(() => Date)
+  @IsDate()
+  @IsOptional()
+  serviceEndsAt?: Date;
+
+  @IsString()
+  @IsOptional()
+  title?: string;
+
+  @IsString()
+  @IsOptional()
+  venueName?: string;
+
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
+  @IsOptional()
+  mapsUrl?: string;
 
   @IsString()
   sku!: string;

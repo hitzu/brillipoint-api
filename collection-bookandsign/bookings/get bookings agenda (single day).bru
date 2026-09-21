@@ -1,0 +1,43 @@
+meta {
+  name: get bookings agenda (single day)
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{base_url}}/bookings/agenda?from=2026-12-16&to=2026-12-16
+  body: none
+  auth: inherit
+}
+
+params:query {
+  from: 2026-12-16
+  to: 2026-12-16
+}
+
+headers {
+  authorization: Bearer {{token}}
+}
+
+tests {
+  test("returns exactly one day", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().days.length).to.equal(1);
+    expect(res.getBody().days[0].date).to.equal("2026-12-16");
+  });
+
+  test("shows the fixture booking with the daytime, non-continuing shape", function () {
+    const id = Number(bru.getVar("agenda_week_booking_id"));
+    const entry = res.getBody().days[0].entries.find(function (e) { return e.id === id; });
+    expect(entry, "fixture booking is served").to.not.equal(undefined);
+    expect(entry.continuesFromPreviousDay).to.equal(false);
+    expect(entry.continuesNextDay).to.equal(false);
+    expect(entry.segmentStartsAt).to.equal(entry.startsAt);
+    expect(entry.segmentEndsAt).to.equal(entry.endsAt);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

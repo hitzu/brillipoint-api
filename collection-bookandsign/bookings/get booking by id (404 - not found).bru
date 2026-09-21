@@ -1,0 +1,30 @@
+meta {
+  name: get booking by id (404 - not found)
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{base_url}}/bookings/:booking_id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  booking_id: 999999999
+}
+
+headers {
+  authorization: Bearer {{token}}
+}
+
+tests {
+  test("returns 404", function () {
+    expect(res.getStatus()).to.equal(404);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

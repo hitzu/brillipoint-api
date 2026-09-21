@@ -1,0 +1,51 @@
+meta {
+  name: reschedule booking
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{base_url}}/bookings/:booking_id/reschedule
+  body: json
+  auth: inherit
+}
+
+params:path {
+  booking_id: {{booking_id}}
+}
+
+headers {
+  authorization: Bearer {{token}}
+}
+
+body:json {
+  {
+    "scheduleType": "exact",
+    "eventDate": "2026-11-08",
+    "serviceStartsAt": "2026-11-08T16:00:00-06:00",
+    "serviceEndsAt": "2026-11-08T20:00:00-06:00",
+    "title": "Rescheduled internal cleanup",
+    "purpose": "other",
+    "venueName": "Rear hall",
+    "mapsUrl": "https://maps.google.com/?q=rear-hall"
+  }
+}
+
+tests {
+  test("reschedules the booking", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("returns the updated schedule and metadata", function () {
+    const booking = res.getBody();
+    expect(booking.eventDate).to.equal("2026-11-08");
+    expect(booking.title).to.equal("Rescheduled internal cleanup");
+    expect(booking.venueName).to.equal("Rear hall");
+    expect(booking).to.have.property("contract");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

@@ -1,0 +1,27 @@
+meta {
+  name: get bookings calendar (400 - invalid month)
+  type: http
+  seq: 17
+}
+
+get {
+  url: {{base_url}}/bookings/calendar?year=2026&month=13
+  body: none
+  auth: none
+}
+
+params:query {
+  year: 2026
+  month: 13
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+tests {
+  test("rejects a month outside 1-12", function () {
+    expect(res.getStatus()).to.equal(400);
+  });
+}

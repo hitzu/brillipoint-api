@@ -45,6 +45,10 @@ import { ContractSlot } from './entities/contract-slot.entity';
 import { Event } from '../events/entities/event.entity';
 import { EventFactory } from '../../test/factories/events/event.factory';
 import { EXTRA_STATUS } from '../extras/types/extras-status.types';
+import { Booking } from '../bookings/entities/booking.entity';
+import { BOOKING_PURPOSE } from '../bookings/constants/booking_purpose.enum';
+import { BOOKING_STATUS } from '../bookings/constants/booking_status.enum';
+import { BOOKING_TYPE } from '../bookings/constants/booking_type.enum';
 
 describe('ContractsService', () => {
   let service: ContractsService;
@@ -54,6 +58,7 @@ describe('ContractsService', () => {
   let paymentsRepo: Repository<Payment>;
   let contractSlotsRepo: Repository<ContractSlot>;
   let slotsRepo: Repository<Slot>;
+  let bookingsRepo: Repository<Booking>;
   let packageFactory: PackageFactory;
   let extraFactory: ExtraFactory;
   let brandFactory: BrandFactory;
@@ -118,6 +123,10 @@ describe('ContractsService', () => {
           provide: getRepositoryToken(Event),
           useValue: TestDataSource.getRepository(Event),
         },
+        {
+          provide: getRepositoryToken(Booking),
+          useValue: TestDataSource.getRepository(Booking),
+        },
       ],
     }).compile();
 
@@ -136,6 +145,7 @@ describe('ContractsService', () => {
       getRepositoryToken(ContractSlot),
     );
     paymentsRepo = module.get<Repository<Payment>>(getRepositoryToken(Payment));
+    bookingsRepo = module.get<Repository<Booking>>(getRepositoryToken(Booking));
 
     packageFactory = new PackageFactory(TestDataSource);
     extraFactory = new ExtraFactory(TestDataSource);
@@ -556,6 +566,276 @@ describe('ContractsService', () => {
       await expect(service.createContract(dto)).rejects.toBeInstanceOf(
         BadRequestException,
       );
+    });
+  });
+
+  describe('createContract (commercial booking, contract-first)', () => {
+    it('should create the contract and one commercial booking when the payload has a schedule and no slotId', async () => {
+      // Arrange
+      const user = await userFactory.create();
+      const eventDate = '2026-11-05';
+      const serviceStartsAt = new Date('2026-11-05T14:00:00.000Z');
+      const serviceEndsAt = new Date('2026-11-05T22:00:00.000Z');
+      const dto: CreateContractFromSlotsDto = {
+        userId: user.id,
+        sku: 'SKU-BOOKING-CONTRACT-FIRST',
+        clientName: 'Ana',
+        clientPhone: null,
+        clientEmail: null,
+        subtotal: 0,
+        discountTotal: 0,
+        total: 0,
+        packages: [],
+        eventDate,
+        serviceStartsAt,
+        serviceEndsAt,
+        title: 'Boda Ana',
+        venueName: 'Salon Principal',
+        mapsUrl: 'https://maps.example.com/venue',
+      };
+
+      // Act
+      const result = await service.createContract(dto);
+
+      // Assert
+      const bookings = await bookingsRepo.find({
+        where: { contractId: result.id },
+      });
+      expect(bookings).toHaveLength(1);
+      expect(bookings[0]?.type).toBe(BOOKING_TYPE.COMMERCIAL);
+      expect(bookings[0]?.purpose).toBe(BOOKING_PURPOSE.EVENT);
+      expect(bookings[0]?.status).toBe(BOOKING_STATUS.CONFIRMED);
+      expect(bookings[0]?.eventDate).toBe(eventDate);
+      expect(bookings[0]?.serviceStartsAt).toEqual(serviceStartsAt);
+      expect(bookings[0]?.serviceEndsAt).toEqual(serviceEndsAt);
+      expect(bookings[0]?.title).toBe('Boda Ana');
+      expect(bookings[0]?.venueName).toBe('Salon Principal');
+      expect(bookings[0]?.mapsUrl).toBe('https://maps.example.com/venue');
+
+      const contractSlots = await contractSlotsRepo.find({
+        where: { contractId: result.id },
+      });
+      expect(contractSlots).toHaveLength(0);
+
+      const savedContract = await contractsRepo.findOne({
+        where: { id: result.id },
+        relations: ['slot'],
+      });
+      expect(savedContract?.slot ?? null).toBeNull();
+    });
+
+    it('should keep legacy slot behavior and create no booking when the payload has slotId and no schedule', async () => {
+      // Arrange
+      const user = await userFactory.create();
+      const slot = await slotFactory.create({
+        status: SLOT_STATUS.RESERVED,
+        period: SLOT_PERIOD.AM_BLOCK,
+      });
+      const dto: CreateContractFromSlotsDto = {
+        userId: user.id,
+        slotId: slot.id,
+        sku: 'SKU-BOOKING-LEGACY',
+        clientName: 'Ana',
+        clientPhone: null,
+        clientEmail: null,
+        subtotal: 0,
+        discountTotal: 0,
+        total: 0,
+        packages: [],
+      };
+
+      // Act
+      const result = await service.createContract(dto);
+
+      // Assert
+      const link = await contractSlotsRepo.findOne({
+        where: { contractId: result.id, slotId: slot.id },
+      });
+      expect(link).toBeDefined();
+
+      const savedContract = await contractsRepo.findOne({
+        where: { id: result.id },
+        relations: ['slot'],
+      });
+      expect(savedContract?.slot?.id).toBe(slot.id);
+
+      const bookings = await bookingsRepo.find({
+        where: { contractId: result.id },
+      });
+      expect(bookings).toHaveLength(0);
+    });
+
+    it('should create both the slot link and a commercial booking when the payload has slotId and a schedule', async () => {
+      // Arrange
+      const user = await userFactory.create();
+      const slot = await slotFactory.create({
+        status: SLOT_STATUS.RESERVED,
+        period: SLOT_PERIOD.AM_BLOCK,
+      });
+      const eventDate = '2026-12-01';
+      const serviceStartsAt = new Date('2026-12-01T10:00:00.000Z');
+      const serviceEndsAt = new Date('2026-12-01T18:00:00.000Z');
+      const dto: CreateContractFromSlotsDto = {
+        userId: user.id,
+        slotId: slot.id,
+        sku: 'SKU-BOOKING-TRANSITION',
+        clientName: 'Ana',
+        clientPhone: null,
+        clientEmail: null,
+        subtotal: 0,
+        discountTotal: 0,
+        total: 0,
+        packages: [],
+        eventDate,
+        serviceStartsAt,
+        serviceEndsAt,
+      };
+
+      // Act
+      const result = await service.createContract(dto);
+
+      // Assert
+      const link = await contractSlotsRepo.findOne({
+        where: { contractId: result.id, slotId: slot.id },
+      });
+      expect(link).toBeDefined();
+
+      const bookings = await bookingsRepo.find({
+        where: { contractId: result.id },
+      });
+      expect(bookings).toHaveLength(1);
+      expect(bookings[0]?.type).toBe(BOOKING_TYPE.COMMERCIAL);
+      expect(bookings[0]?.purpose).toBe(BOOKING_PURPOSE.EVENT);
+    });
+
+    it('should throw BadRequestException when neither slotId nor a schedule is provided', async () => {
+      // Arrange
+      const user = await userFactory.create();
+      const dto: CreateContractFromSlotsDto = {
+        userId: user.id,
+        sku: 'SKU-BOOKING-NEITHER',
+        clientName: 'Ana',
+        clientPhone: null,
+        clientEmail: null,
+        subtotal: 0,
+        discountTotal: 0,
+        total: 0,
+        packages: [],
+      };
+
+      // Act & Assert
+      await expect(service.createContract(dto)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it('should throw BadRequestException when the schedule fields are explicitly null', async () => {
+      // Arrange
+      // `@IsOptional()` skips validation for null exactly as it does for
+      // undefined, and `@Type(() => Date)` leaves an explicit null untouched,
+      // so this payload reaches the service with real nulls. It must be
+      // rejected as "no schedule", never dereferenced.
+      const user = await userFactory.create();
+      const dto = {
+        userId: user.id,
+        sku: 'SKU-BOOKING-NULL-SCHEDULE',
+        clientName: 'Ana',
+        clientPhone: null,
+        clientEmail: null,
+        subtotal: 0,
+        discountTotal: 0,
+        total: 0,
+        packages: [],
+        eventDate: null,
+        serviceStartsAt: null,
+        serviceEndsAt: null,
+      } as unknown as CreateContractFromSlotsDto;
+
+      // Act & Assert
+      await expect(service.createContract(dto)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+
+      const contract = await contractsRepo.findOne({
+        where: { sku: 'SKU-BOOKING-NULL-SCHEDULE' },
+      });
+      expect(contract).toBeNull();
+    });
+
+    it('should throw BadRequestException when serviceEndsAt is not after serviceStartsAt, leaving no contract or booking behind', async () => {
+      // Arrange
+      const user = await userFactory.create();
+      const sameInstant = new Date('2026-12-10T10:00:00.000Z');
+      const dto: CreateContractFromSlotsDto = {
+        userId: user.id,
+        sku: 'SKU-BOOKING-BAD-RANGE',
+        clientName: 'Ana',
+        clientPhone: null,
+        clientEmail: null,
+        subtotal: 0,
+        discountTotal: 0,
+        total: 0,
+        packages: [],
+        eventDate: '2026-12-10',
+        serviceStartsAt: sameInstant,
+        serviceEndsAt: sameInstant,
+      };
+
+      // Act & Assert
+      await expect(service.createContract(dto)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+
+      const contract = await contractsRepo.findOne({
+        where: { sku: 'SKU-BOOKING-BAD-RANGE' },
+      });
+      expect(contract).toBeNull();
+
+      const bookings = await bookingsRepo.find({
+        where: { eventDate: '2026-12-10' },
+      });
+      expect(bookings).toHaveLength(0);
+    });
+
+    it('should roll back the booking when the transaction fails after the contract is saved', async () => {
+      // Arrange
+      const user = await userFactory.create();
+      const contractBrand = await brandFactory.create();
+      const extraBrand = await brandFactory.create();
+      const extra = await extraFactory.createForBrand(extraBrand, {
+        status: EXTRA_STATUS.ACTIVE,
+      });
+      const bookingsBefore = await bookingsRepo.count();
+      const dto: CreateContractFromSlotsDto = {
+        userId: user.id,
+        brandId: contractBrand.id,
+        sku: 'SKU-BOOKING-ROLLBACK',
+        clientName: 'Ana',
+        clientPhone: null,
+        clientEmail: null,
+        subtotal: 0,
+        discountTotal: 0,
+        total: 0,
+        packages: [],
+        extras: [{ extraId: extra.id, quantity: 1 }],
+        eventDate: '2026-12-15',
+        serviceStartsAt: new Date('2026-12-15T10:00:00.000Z'),
+        serviceEndsAt: new Date('2026-12-15T18:00:00.000Z'),
+      };
+
+      // Act
+      await expect(service.createContract(dto)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+
+      // Assert
+      const contract = await contractsRepo.findOne({
+        where: { sku: 'SKU-BOOKING-ROLLBACK' },
+      });
+      expect(contract).toBeNull();
+
+      const bookingsAfter = await bookingsRepo.count();
+      expect(bookingsAfter).toBe(bookingsBefore);
     });
   });
 

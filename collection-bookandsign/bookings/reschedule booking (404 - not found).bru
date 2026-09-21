@@ -1,0 +1,39 @@
+meta {
+  name: reschedule booking (404 - not found)
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{base_url}}/bookings/:booking_id/reschedule
+  body: json
+  auth: inherit
+}
+
+params:path {
+  booking_id: 999999999
+}
+
+headers {
+  authorization: Bearer {{token}}
+}
+
+body:json {
+  {
+    "scheduleType": "exact",
+    "eventDate": "2026-11-08",
+    "serviceStartsAt": "2026-11-08T16:00:00-06:00",
+    "serviceEndsAt": "2026-11-08T20:00:00-06:00"
+  }
+}
+
+tests {
+  test("returns 404", function () {
+    expect(res.getStatus()).to.equal(404);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

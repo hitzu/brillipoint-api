@@ -7,6 +7,7 @@ import { NOTE_SCOPE } from './types/note-scope.types';
 import { NOTE_KIND } from './types/note-kind.types';
 import { NoteDto } from './dto/note.dto';
 import { SlotsService } from '../slots/slots.service';
+import { BookingsService } from '../bookings/bookings.service';
 
 @Injectable()
 export class NotesService {
@@ -16,16 +17,27 @@ export class NotesService {
     @InjectRepository(Note)
     private notesRepository: Repository<Note>,
     private slotsService: SlotsService,
+    private bookingsService: BookingsService,
   ) {}
+
+  private async assertTargetExists(
+    scope: NOTE_SCOPE,
+    targetId: number,
+  ): Promise<void> {
+    if (scope === NOTE_SCOPE.SLOT) {
+      await this.slotsService.getById(targetId);
+    }
+    if (scope === NOTE_SCOPE.BOOKING) {
+      await this.bookingsService.findDetailById(targetId);
+    }
+  }
 
   async findTimelineByTarget(
     scope: NOTE_SCOPE,
     targetId: number,
     kind: NOTE_KIND,
   ): Promise<NoteDto[]> {
-    if (scope === NOTE_SCOPE.SLOT) {
-      await this.slotsService.getById(targetId);
-    }
+    await this.assertTargetExists(scope, targetId);
     const notes = await this.notesRepository.find({
       where: { scope, targetId, kind },
       order: { createdAt: 'ASC' },
@@ -46,9 +58,7 @@ export class NotesService {
     kind: NOTE_KIND;
     createdBy: number;
   }): Promise<NoteDto> {
-    if (scope === NOTE_SCOPE.SLOT) {
-      await this.slotsService.getById(targetId);
-    }
+    await this.assertTargetExists(scope, targetId);
     try {
       const noteToSave = this.notesRepository.create({
         scope,

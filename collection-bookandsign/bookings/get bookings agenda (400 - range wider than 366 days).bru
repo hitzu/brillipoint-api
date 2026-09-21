@@ -1,0 +1,32 @@
+meta {
+  name: get bookings agenda (400 - range wider than 366 days)
+  type: http
+  seq: 15
+}
+
+get {
+  url: {{base_url}}/bookings/agenda?from=2026-09-01&to=2027-09-05
+  body: none
+  auth: inherit
+}
+
+params:query {
+  from: 2026-09-01
+  to: 2027-09-05
+}
+
+headers {
+  authorization: Bearer {{token}}
+}
+
+tests {
+  test("refuses to serve more than 366 days at once", function () {
+    expect(res.getStatus()).to.equal(400);
+    expect(res.getBody().message).to.equal("Agenda range cannot exceed 366 days");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
