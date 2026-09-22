@@ -5,14 +5,14 @@ meta {
 }
 
 get {
-  url: {{base_url}}/bookings/agenda?from=2026-12-23&to=2026-12-23
+  url: {{base_url}}/bookings/agenda?from={{ov_overnight_end_date}}&to={{ov_overnight_end_date}}
   body: none
   auth: inherit
 }
 
 params:query {
-  from: 2026-12-23
-  to: 2026-12-23
+  from: {{ov_overnight_end_date}}
+  to: {{ov_overnight_end_date}}
 }
 
 headers {

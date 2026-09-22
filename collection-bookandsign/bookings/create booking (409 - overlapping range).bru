@@ -1,0 +1,111 @@
+meta {
+  name: create booking (409 - overlapping range)
+  type: http
+  seq: 21
+}
+
+post {
+  url: {{base_url}}/bookings
+  body: json
+  auth: inherit
+}
+
+headers {
+  authorization: Bearer {{token}}
+}
+
+script:pre-request {
+  // This request needs two real bookings: one that exists first, and a second,
+  // overlapping one that this file's own request sends (so its 409 response and
+  // tests below can inspect it). A single .bru file can only describe one HTTP
+  // call, so the first booking is created here with bru.sendRequest — the
+  // sandboxed script has no network access of its own, this is the API Bruno
+  // exposes for exactly this "set up a fixture, then exercise it" pattern.
+  //
+  // The date is {{ov_guard_date}}, computed once per run by the folder-level
+  // pre-request script (see folder.bru): far from every other fixture in this
+  // folder, so this conflict never collides with any of them.
+  const guardDate = bru.getVar('ov_guard_date');
+  const firstStartsAt = `${guardDate}T14:00:00-06:00`;
+  const firstEndsAt = `${guardDate}T18:00:00-06:00`;
+
+  let setup;
+  try {
+    setup = await bru.sendRequest({
+      method: 'POST',
+      url: bru.interpolate('{{base_url}}/bookings'),
+      headers: {
+        Authorization: bru.interpolate('Bearer {{token}}'),
+        'Content-Type': 'application/json'
+      },
+      data: {
+        scheduleType: 'exact',
+        eventDate: guardDate,
+        serviceStartsAt: firstStartsAt,
+        serviceEndsAt: firstEndsAt,
+        title: 'Overlap guard first booking',
+        purpose: 'other',
+        venueName: 'Overlap guard hall'
+      }
+    });
+  } catch (error) {
+    // axios rejects on a non-2xx status by default, so a failed setup call lands here
+    // rather than in a status check below.
+    const status = error && error.response ? error.response.status : "no response";
+    throw new Error(
+      `Setup for the overlap 409 test failed creating the first booking (status: ${status}): ${error.message}`
+    );
+  }
+
+  if (setup.status !== 201) {
+    throw new Error(
+      `Setup for the overlap 409 test failed: expected 201 creating the first booking, got ${setup.status}`
+    );
+  }
+
+  bru.setVar('ov_guard_first_booking_id', setup.data.id);
+  bru.setVar('ov_guard_first_booking_title', setup.data.title);
+  bru.setVar('ov_guard_first_starts_at', setup.data.serviceStartsAt);
+  bru.setVar('ov_guard_first_ends_at', setup.data.serviceEndsAt);
+}
+
+body:json {
+  {
+    "scheduleType": "exact",
+    "eventDate": "{{ov_guard_date}}",
+    "serviceStartsAt": "{{ov_guard_date}}T16:00:00-06:00",
+    "serviceEndsAt": "{{ov_guard_date}}T20:00:00-06:00",
+    "title": "Overlap guard second booking",
+    "purpose": "other",
+    "venueName": "Overlap guard hall"
+  }
+}
+
+tests {
+  test("rejects the overlapping range with 409", function () {
+    expect(res.getStatus()).to.equal(409);
+  });
+
+  test("names the guard's error code and message", function () {
+    const body = res.getBody();
+    expect(body.code).to.equal(44);
+    expect(body.message).to.equal("booking overlaps an existing booking");
+  });
+
+  test("lists the first booking as the conflict", function () {
+    const body = res.getBody();
+    const firstId = Number(bru.getVar("ov_guard_first_booking_id"));
+
+    expect(body.conflicts).to.be.an("array");
+    const conflict = body.conflicts.find(function (c) { return c.id === firstId; });
+    expect(conflict, "first booking is named as a conflict").to.not.equal(undefined);
+    expect(conflict.title).to.equal(bru.getVar("ov_guard_first_booking_title"));
+    expect(conflict.serviceStartsAt).to.equal(bru.getVar("ov_guard_first_starts_at"));
+    expect(conflict.serviceEndsAt).to.equal(bru.getVar("ov_guard_first_ends_at"));
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

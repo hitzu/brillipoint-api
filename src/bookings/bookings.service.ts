@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -7,7 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { plainToInstance } from 'class-transformer';
 import { isURL } from 'class-validator';
-import { Repository } from 'typeorm';
+import { LessThan, MoreThan, Repository } from 'typeorm';
 
 import { EXCEPTION_RESPONSE } from '../config/errors/exception-response.config';
 import { Contract } from '../contracts/entities/contract.entity';
@@ -34,6 +35,8 @@ export class BookingsService {
     this.assertMapsUrl(dto.mapsUrl);
 
     const contract = await this.resolveContract(dto.contractId);
+
+    await this.assertNoOverlap(dto.serviceStartsAt, dto.serviceEndsAt);
 
     try {
       const bookingToSave = this.bookingsRepository.create({
@@ -148,6 +151,43 @@ export class BookingsService {
       throw new BadRequestException(
         'serviceEndsAt must be after serviceStartsAt',
       );
+    }
+  }
+
+  /**
+   * Rejects a new range that overlaps any existing booking, using the
+   * half-open comparison `newStart < existingEnd && existingStart < newEnd`:
+   * a booking ending exactly when another starts is not a conflict. Overlap
+   * is checked globally, regardless of `purpose` or `venueName`, because the
+   * resource being scheduled is the two operators, not a venue.
+   *
+   * Only `create` calls this. `reschedule` deliberately keeps allowing
+   * overlap: a morning event routinely redefines its end so the afternoon
+   * team can arrive early, and services habitually arrive at the tail of the
+   * previous booking.
+   */
+  private async assertNoOverlap(
+    serviceStartsAt: Date,
+    serviceEndsAt: Date,
+  ): Promise<void> {
+    const conflicts = await this.bookingsRepository.find({
+      where: {
+        serviceStartsAt: LessThan(serviceEndsAt),
+        serviceEndsAt: MoreThan(serviceStartsAt),
+      },
+      order: { serviceStartsAt: 'ASC' },
+    });
+
+    if (conflicts.length > 0) {
+      throw new ConflictException({
+        ...EXCEPTION_RESPONSE.BOOKING_OVERLAP,
+        conflicts: conflicts.map((conflict) => ({
+          id: conflict.id,
+          title: conflict.title,
+          serviceStartsAt: conflict.serviceStartsAt,
+          serviceEndsAt: conflict.serviceEndsAt,
+        })),
+      });
     }
   }
 

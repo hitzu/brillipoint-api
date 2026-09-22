@@ -5,14 +5,14 @@ meta {
 }
 
 get {
-  url: {{base_url}}/bookings/agenda?from=2026-12-14&to=2026-12-20
+  url: {{base_url}}/bookings/agenda?from={{ov_week_start}}&to={{ov_week_end}}
   body: none
   auth: inherit
 }
 
 params:query {
-  from: 2026-12-14
-  to: 2026-12-20
+  from: {{ov_week_start}}
+  to: {{ov_week_end}}
 }
 
 headers {
@@ -27,19 +27,12 @@ tests {
 
   test("every day in the range is present, in order, even when empty", function () {
     const dates = res.getBody().days.map(function (day) { return day.date; });
-    expect(dates).to.eql([
-      "2026-12-14",
-      "2026-12-15",
-      "2026-12-16",
-      "2026-12-17",
-      "2026-12-18",
-      "2026-12-19",
-      "2026-12-20",
-    ]);
+    expect(dates).to.eql(JSON.parse(bru.getVar("ov_week_dates_json")));
   });
 
   test("shows the fixture booking on its own day", function () {
-    const day = res.getBody().days.find(function (d) { return d.date === "2026-12-16"; });
+    const fixtureDate = bru.getVar("ov_week_fixture_date");
+    const day = res.getBody().days.find(function (d) { return d.date === fixtureDate; });
     const id = Number(bru.getVar("agenda_week_booking_id"));
     const entry = day.entries.find(function (e) { return e.id === id; });
     expect(entry, "fixture booking is served on its day").to.not.equal(undefined);

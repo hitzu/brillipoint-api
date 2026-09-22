@@ -42,6 +42,7 @@ enum ErrorMessages {
   SESSION_ID_REQUIRED = 'SESSION_ID_REQUIRED',
   BOOKING_NOT_FOUND = 'BOOKING_NOT_FOUND',
   CONTRACT_NOT_FOUND = 'CONTRACT_NOT_FOUND',
+  BOOKING_OVERLAP = 'BOOKING_OVERLAP',
 }
 
 export const EXCEPTION_RESPONSE: Record<
@@ -220,5 +221,9 @@ export const EXCEPTION_RESPONSE: Record<
   [ErrorMessages.CONTRACT_NOT_FOUND]: {
     code: 43,
     message: 'contract not found',
+  },
+  [ErrorMessages.BOOKING_OVERLAP]: {
+    code: 44,
+    message: 'booking overlaps an existing booking',
   },
 };

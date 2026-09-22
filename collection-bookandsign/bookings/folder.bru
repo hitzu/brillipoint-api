@@ -6,3 +6,65 @@ meta {
 auth {
   mode: inherit
 }
+
+script:pre-request {
+  // The overlap guard (see odd/tasks/booking-overlap-guard.md) makes booked ranges
+  // stick: a second run of this folder that reuses the same hardcoded dates as the
+  // first run gets rejected with 409 instead of creating its fixtures. This computes
+  // one per-run anchor date and publishes the dates the colliding fixtures need as
+  // vars, so those requests read `{{var}}` instead of a literal date.
+  //
+  // A folder-level pre-request script runs before EVERY request in the folder, so
+  // recomputing the anchor on each request would hand every fixture a different day
+  // and break the relationships between them (week window, overnight-spans-midnight,
+  // etc). Read the var back first and only compute once per run.
+  if (!bru.getVar('ov_week_start')) {
+    // Distinct per run rather than per calendar day: two runs seconds or minutes
+    // apart in the same afternoon must land on different days, not just different
+    // runs on different dates. Anchored to a base far past every hand-picked
+    // fixture date left in this folder (2026-11-xx / 2026-12-xx), so the computed
+    // dates can never coincide with those by construction, not by luck.
+    // Seconds alone are not enough. The clock gives a value that changes every
+    // second but REPEATS once the modulus wraps, so two runs an exact multiple of
+    // the modulus apart -- or two CI workers starting in the same second -- would
+    // compute the same anchor, which is the exact collision this exists to prevent.
+    // Mixing in a random draw makes that a 1-in-100000 accident instead of a
+    // certainty, and the clock term keeps consecutive local runs spread out.
+    const runOffsetDays =
+      (Math.floor(Date.now() / 1000) + Math.floor(Math.random() * 100000)) % 100000;
+    const DAY = 24 * 60 * 60 * 1000;
+    const base = Date.UTC(2030, 0, 1);
+
+    const iso = (ms) => new Date(ms).toISOString().slice(0, 10);
+
+    const weekStartMs = base + runOffsetDays * DAY;
+    const weekFixtureMs = weekStartMs + 2 * DAY; // 3rd day of the 7-day window
+    const weekEndMs = weekStartMs + 6 * DAY; // 7-day inclusive window
+    const overnightStartMs = weekEndMs + 2 * DAY; // strictly after the week window ends
+    const overnightEndMs = overnightStartMs + DAY; // civil next day (spans midnight)
+
+    // 500 days clear of the week/overnight range (offsets 0..9) on either side, so
+    // these never collide with the fixtures above or with each other, regardless of
+    // runOffsetDays.
+    const standaloneMs = base + runOffsetDays * DAY - 500 * DAY;
+    const guardMs = base + runOffsetDays * DAY + 500 * DAY;
+
+    bru.setVar('ov_standalone_date', iso(standaloneMs));
+    bru.setVar('ov_standalone_next_date', iso(standaloneMs + DAY));
+
+    bru.setVar('ov_week_start', iso(weekStartMs));
+    bru.setVar('ov_week_end', iso(weekEndMs));
+    bru.setVar('ov_week_fixture_date', iso(weekFixtureMs));
+    bru.setVar(
+      'ov_week_dates_json',
+      JSON.stringify([0, 1, 2, 3, 4, 5, 6].map(function (n) {
+        return iso(weekStartMs + n * DAY);
+      }))
+    );
+
+    bru.setVar('ov_overnight_start_date', iso(overnightStartMs));
+    bru.setVar('ov_overnight_end_date', iso(overnightEndMs));
+
+    bru.setVar('ov_guard_date', iso(guardMs));
+  }
+}

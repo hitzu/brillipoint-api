@@ -5,14 +5,14 @@ meta {
 }
 
 get {
-  url: {{base_url}}/bookings/agenda?from=2026-12-22&to=2026-12-23
+  url: {{base_url}}/bookings/agenda?from={{ov_overnight_start_date}}&to={{ov_overnight_end_date}}
   body: none
   auth: inherit
 }
 
 params:query {
-  from: 2026-12-22
-  to: 2026-12-23
+  from: {{ov_overnight_start_date}}
+  to: {{ov_overnight_end_date}}
 }
 
 headers {
@@ -34,8 +34,8 @@ tests {
       });
     });
     expect(segments.length).to.equal(2);
-    expect(segments[0].date).to.equal("2026-12-22");
-    expect(segments[1].date).to.equal("2026-12-23");
+    expect(segments[0].date).to.equal(bru.getVar("ov_overnight_start_date"));
+    expect(segments[1].date).to.equal(bru.getVar("ov_overnight_end_date"));
   });
 
   test("flags the continuation on both sides of midnight", function () {

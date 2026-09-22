@@ -1,4 +1,8 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -130,6 +134,8 @@ describe('BookingsService', () => {
         ...baseDto(),
         contractId: contract.id,
         purpose: BOOKING_PURPOSE.SCOUTING,
+        serviceStartsAt: new Date('2026-10-02T14:00:00.000Z'),
+        serviceEndsAt: new Date('2026-10-02T18:00:00.000Z'),
       };
 
       // Act
@@ -197,6 +203,205 @@ describe('BookingsService', () => {
       // Act + Assert
       await expect(service.create(dto)).rejects.toBeInstanceOf(
         BadRequestException,
+      );
+    });
+
+    it('rejects a range that overlaps an existing booking', async () => {
+      // Arrange
+      await bookingFactory.create({
+        serviceStartsAt: new Date('2026-10-01T14:00:00.000Z'),
+        serviceEndsAt: new Date('2026-10-01T18:00:00.000Z'),
+      });
+      const dto: CreateBookingDto = {
+        ...baseDto(),
+        serviceStartsAt: new Date('2026-10-01T16:00:00.000Z'),
+        serviceEndsAt: new Date('2026-10-01T20:00:00.000Z'),
+      };
+
+      // Act + Assert
+      await expect(service.create(dto)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+    });
+
+    it('accepts a range that ends exactly when an existing one starts', async () => {
+      // Arrange
+      await bookingFactory.create({
+        serviceStartsAt: new Date('2026-10-01T14:00:00.000Z'),
+        serviceEndsAt: new Date('2026-10-01T18:00:00.000Z'),
+      });
+      const dto: CreateBookingDto = {
+        ...baseDto(),
+        serviceStartsAt: new Date('2026-10-01T10:00:00.000Z'),
+        serviceEndsAt: new Date('2026-10-01T14:00:00.000Z'),
+      };
+
+      // Act
+      const result = await service.create(dto);
+
+      // Assert
+      expect(result.id).toBeDefined();
+    });
+
+    it('accepts a range that starts exactly when an existing one ends', async () => {
+      // Arrange
+      await bookingFactory.create({
+        serviceStartsAt: new Date('2026-10-01T14:00:00.000Z'),
+        serviceEndsAt: new Date('2026-10-01T18:00:00.000Z'),
+      });
+      const dto: CreateBookingDto = {
+        ...baseDto(),
+        serviceStartsAt: new Date('2026-10-01T18:00:00.000Z'),
+        serviceEndsAt: new Date('2026-10-01T22:00:00.000Z'),
+      };
+
+      // Act
+      const result = await service.create(dto);
+
+      // Assert
+      expect(result.id).toBeDefined();
+    });
+
+    it('accepts a range on a different day', async () => {
+      // Arrange
+      await bookingFactory.create({
+        serviceStartsAt: new Date('2026-10-01T14:00:00.000Z'),
+        serviceEndsAt: new Date('2026-10-01T18:00:00.000Z'),
+      });
+      const dto: CreateBookingDto = {
+        ...baseDto(),
+        serviceStartsAt: new Date('2026-10-02T14:00:00.000Z'),
+        serviceEndsAt: new Date('2026-10-02T18:00:00.000Z'),
+      };
+
+      // Act
+      const result = await service.create(dto);
+
+      // Assert
+      expect(result.id).toBeDefined();
+    });
+
+    it('names the conflicting booking in the rejection', async () => {
+      // Arrange
+      const existing = await bookingFactory.create({
+        title: 'Existing wedding',
+        serviceStartsAt: new Date('2026-10-01T14:00:00.000Z'),
+        serviceEndsAt: new Date('2026-10-01T18:00:00.000Z'),
+      });
+      const dto: CreateBookingDto = {
+        ...baseDto(),
+        serviceStartsAt: new Date('2026-10-01T16:00:00.000Z'),
+        serviceEndsAt: new Date('2026-10-01T20:00:00.000Z'),
+      };
+
+      // Act + Assert
+      await expect(service.create(dto)).rejects.toEqual(
+        new ConflictException({
+          ...EXCEPTION_RESPONSE.BOOKING_OVERLAP,
+          conflicts: [
+            {
+              id: existing.id,
+              title: existing.title,
+              serviceStartsAt: existing.serviceStartsAt,
+              serviceEndsAt: existing.serviceEndsAt,
+            },
+          ],
+        }),
+      );
+    });
+
+    it('leaves the next day free: a blocked date ends exclusively at 00:00', async () => {
+      // Arrange
+      await bookingFactory.create({
+        title: 'Blocked day',
+        serviceStartsAt: new Date('2026-10-01T00:00:00.000Z'),
+        serviceEndsAt: new Date('2026-10-02T00:00:00.000Z'),
+      });
+      const dto: CreateBookingDto = {
+        ...baseDto(),
+        serviceStartsAt: new Date('2026-10-02T00:00:00.000Z'),
+        serviceEndsAt: new Date('2026-10-02T04:00:00.000Z'),
+      };
+
+      // Act
+      const result = await service.create(dto);
+
+      // Assert
+      expect(result.id).toBeDefined();
+    });
+
+    it('ignores a soft-deleted booking when looking for conflicts', async () => {
+      // Arrange
+      const deleted = await bookingFactory.create({
+        serviceStartsAt: new Date('2026-10-01T14:00:00.000Z'),
+        serviceEndsAt: new Date('2026-10-01T18:00:00.000Z'),
+      });
+      await bookingsRepository.softDelete(deleted.id);
+      const dto: CreateBookingDto = {
+        ...baseDto(),
+        serviceStartsAt: new Date('2026-10-01T14:00:00.000Z'),
+        serviceEndsAt: new Date('2026-10-01T18:00:00.000Z'),
+      };
+
+      // Act
+      const result = await service.create(dto);
+
+      // Assert
+      expect(result.id).toBeDefined();
+    });
+
+    it('lists every booking a single range overlaps, in start order', async () => {
+      // Arrange
+      const second = await bookingFactory.create({
+        title: 'Afternoon trial',
+        serviceStartsAt: new Date('2026-10-01T15:00:00.000Z'),
+        serviceEndsAt: new Date('2026-10-01T17:00:00.000Z'),
+      });
+      const first = await bookingFactory.create({
+        title: 'Morning event',
+        serviceStartsAt: new Date('2026-10-01T09:00:00.000Z'),
+        serviceEndsAt: new Date('2026-10-01T13:00:00.000Z'),
+      });
+      const dto: CreateBookingDto = {
+        ...baseDto(),
+        serviceStartsAt: new Date('2026-10-01T08:00:00.000Z'),
+        serviceEndsAt: new Date('2026-10-01T20:00:00.000Z'),
+      };
+
+      // Act
+      const error = await service.create(dto).catch((thrown: unknown) => thrown);
+
+      // Assert
+      expect(error).toBeInstanceOf(ConflictException);
+      const response = (error as ConflictException).getResponse() as {
+        conflicts: { id: number; title: string | null }[];
+      };
+      expect(response.conflicts.map((conflict) => conflict.id)).toEqual([
+        first.id,
+        second.id,
+      ]);
+      expect(response.conflicts.map((conflict) => conflict.title)).toEqual([
+        'Morning event',
+        'Afternoon trial',
+      ]);
+    });
+
+    it('rejects every later booking on a blocked date', async () => {
+      // Arrange
+      await bookingFactory.create({
+        title: 'Blocked day',
+        serviceStartsAt: new Date('2026-10-01T00:00:00.000Z'),
+        serviceEndsAt: new Date('2026-10-02T00:00:00.000Z'),
+      });
+      const dto: CreateBookingDto = {
+        ...baseDto(),
+        serviceStartsAt: new Date('2026-10-01T23:00:00.000Z'),
+        serviceEndsAt: new Date('2026-10-01T23:30:00.000Z'),
+      };
+
+      // Act + Assert
+      await expect(service.create(dto)).rejects.toBeInstanceOf(
+        ConflictException,
       );
     });
   });

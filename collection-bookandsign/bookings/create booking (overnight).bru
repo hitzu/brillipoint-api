@@ -17,9 +17,9 @@ headers {
 body:json {
   {
     "scheduleType": "exact",
-    "eventDate": "2026-11-02",
-    "serviceStartsAt": "2026-11-02T22:00:00-06:00",
-    "serviceEndsAt": "2026-11-03T02:00:00-06:00",
+    "eventDate": "{{ov_standalone_date}}",
+    "serviceStartsAt": "{{ov_standalone_date}}T22:00:00-06:00",
+    "serviceEndsAt": "{{ov_standalone_next_date}}T02:00:00-06:00",
     "title": "Overnight wedding",
     "venueName": "Garden salon"
   }
@@ -36,7 +36,7 @@ tests {
     // -06:00 offset. A substring check for the local civil date does not apply here;
     // assert the actual contract instead: the instant ordering and duration.
     const booking = res.getBody();
-    expect(booking.eventDate).to.equal("2026-11-02");
+    expect(booking.eventDate).to.equal(bru.getVar("ov_standalone_date"));
     const startsAt = new Date(booking.serviceStartsAt).getTime();
     const endsAt = new Date(booking.serviceEndsAt).getTime();
     expect(endsAt).to.be.above(startsAt);
