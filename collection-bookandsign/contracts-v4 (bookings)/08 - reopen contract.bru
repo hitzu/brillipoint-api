@@ -1,0 +1,27 @@
+meta {
+  name: 08 - reopen contract
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{base_url}}/contracts/{{v4_contract_id}}/reopen
+  body: json
+  auth: inherit
+}
+
+headers {
+  authorization: Bearer {{token}}
+}
+
+tests {
+  test("reopens the cancelled contract back to confirmed", function () {
+    expect(res.getStatus()).to.equal(201);
+    expect(res.getBody().contract.status).to.equal("confirmed");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

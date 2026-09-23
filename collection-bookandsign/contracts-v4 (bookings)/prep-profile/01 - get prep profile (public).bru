@@ -1,0 +1,30 @@
+meta {
+  name: 01 - get prep profile (public)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/contracts/public/{{v4_contract_token}}/prep-profile?phone={{v4_client_phone}}
+  body: json
+  auth: none
+}
+
+params:query {
+  phone: {{v4_client_phone}}
+}
+
+tests {
+  test("returns the (empty) prep profile for this contract", function () {
+    expect(res.getStatus()).to.equal(200);
+    const body = res.getBody();
+    expect(body.contractId).to.equal(Number(bru.getVar("v4_contract_id")));
+    expect(body.answers).to.be.an("object");
+    expect(body.locked).to.be.an("object");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

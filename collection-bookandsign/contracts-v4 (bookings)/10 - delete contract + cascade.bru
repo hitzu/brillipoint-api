@@ -1,0 +1,26 @@
+meta {
+  name: 10 - delete contract + cascade
+  type: http
+  seq: 14
+}
+
+delete {
+  url: {{base_url}}/contracts/{{v4_contract_id}}
+  body: none
+  auth: inherit
+}
+
+headers {
+  authorization: Bearer {{token}}
+}
+
+tests {
+  test("soft-deletes the contract", function () {
+    expect(res.getStatus()).to.equal(204);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

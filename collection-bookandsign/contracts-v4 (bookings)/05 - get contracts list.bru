@@ -1,0 +1,40 @@
+meta {
+  name: 05 - get contracts list
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{base_url}}/contracts?includeFinalized=false
+  body: json
+  auth: inherit
+}
+
+params:query {
+  includeFinalized: false
+}
+
+headers {
+  authorization: Bearer {{token}}
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("lists the contract with its bookings", function () {
+    const body = res.getBody();
+    expect(body).to.be.an("array");
+    const contractId = Number(bru.getVar("v4_contract_id"));
+    const entry = body.find(function (c) { return c.id === contractId; });
+    expect(entry, "contract is present in the list").to.not.equal(undefined);
+    expect(entry.bookings).to.be.an("array").with.lengthOf(1);
+    expect(entry.bookings[0].id).to.equal(Number(bru.getVar("v4_booking_id")));
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

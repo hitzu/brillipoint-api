@@ -1,0 +1,27 @@
+meta {
+  name: 09 - finalize contract
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{base_url}}/contracts/{{v4_contract_id}}/finalize
+  body: json
+  auth: inherit
+}
+
+headers {
+  authorization: Bearer {{token}}
+}
+
+tests {
+  test("finalizes the confirmed contract", function () {
+    expect(res.getStatus()).to.equal(201);
+    expect(res.getBody().contract.status).to.equal("finalized");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

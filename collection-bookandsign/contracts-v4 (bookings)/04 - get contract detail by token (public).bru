@@ -1,0 +1,37 @@
+meta {
+  name: 04 - get contract detail by token (public)
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{base_url}}/contracts/get-by-token/{{v4_contract_token}}
+  body: json
+  auth: none
+}
+
+tests {
+  test("returns the contract detail by token, no auth needed", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().contract.token).to.equal(bru.getVar("v4_contract_token"));
+  });
+
+  test("includes the booking in bookings", function () {
+    const body = res.getBody();
+    expect(body.bookings).to.be.an("array").with.lengthOf(1);
+    expect(body.bookings[0].id).to.equal(Number(bru.getVar("v4_booking_id")));
+  });
+
+  test("masks PII, legacy fields still present", function () {
+    const body = res.getBody();
+    expect(body.contract.clientPhone).to.not.equal("5215555550199");
+    expect(body.contract.clientEmail).to.not.equal(undefined);
+    expect(body.packages).to.be.an("array").with.lengthOf(1);
+    expect(body.extras).to.be.an("array").with.lengthOf(1);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

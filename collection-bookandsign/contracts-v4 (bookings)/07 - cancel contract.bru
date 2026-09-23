@@ -1,0 +1,32 @@
+meta {
+  name: 07 - cancel contract
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{base_url}}/contracts/{{v4_contract_id}}/cancel
+  body: json
+  auth: inherit
+}
+
+headers {
+  authorization: Bearer {{token}}
+}
+
+tests {
+  test("cancels the contract", function () {
+    expect(res.getStatus()).to.equal(201);
+    expect(res.getBody().contract.status).to.equal("cancelled");
+  });
+
+  test("keeps the booking on the detail response", function () {
+    const body = res.getBody();
+    expect(body.bookings).to.be.an("array").with.lengthOf(1);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

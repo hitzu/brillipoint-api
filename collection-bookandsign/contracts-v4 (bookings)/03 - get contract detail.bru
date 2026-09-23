@@ -1,0 +1,48 @@
+meta {
+  name: 03 - get contract detail
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{base_url}}/contracts/{{v4_contract_id}}
+  body: json
+  auth: inherit
+}
+
+headers {
+  authorization: Bearer {{token}}
+}
+
+tests {
+  test("returns the contract detail", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().contract.id).to.equal(Number(bru.getVar("v4_contract_id")));
+  });
+
+  test("includes the booking in bookings, legacy fields still present", function () {
+    const body = res.getBody();
+    expect(body.bookings).to.be.an("array").with.lengthOf(1);
+    const booking = body.bookings[0];
+    expect(booking.id).to.equal(Number(bru.getVar("v4_booking_id")));
+    expect(booking.status).to.equal("confirmed");
+    expect(booking.purpose).to.equal("event");
+    expect(booking.eventDate).to.equal(bru.getVar("v4_booking_date"));
+    expect(booking.title).to.equal("contracts-v4 booking");
+    expect(booking.venueName).to.equal("Main hall");
+
+    // Legacy shape untouched by the bookings addition. Note: this by-id
+    // detail endpoint exposes the packages under `items` (not `packages` —
+    // that's the token-detail/list shape, see 04/05/06); both are on
+    // ContractDetailDto, only this endpoint populates `items`.
+    expect(body.contract).to.be.an("object");
+    expect(body.items).to.be.an("array").with.lengthOf(1);
+    expect(body.extras).to.be.an("array").with.lengthOf(1);
+    expect(body.contractSlots).to.be.an("array");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

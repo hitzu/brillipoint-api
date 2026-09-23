@@ -1,0 +1,33 @@
+meta {
+  name: prep-profile
+  seq: 13
+}
+
+auth {
+  mode: inherit
+}
+
+docs {
+  Chained to the contracts-v4 contract created by the parent folder
+  (`{{v4_contract_token}}` / `{{v4_contract_id}}` / `{{v4_client_phone}}`).
+  Runs after `09 - finalize contract` and before the parent's
+  `10 - delete contract + cascade` — prep-profile has no status guard, but a
+  soft-deleted contract is no longer resolvable by token or id, so this
+  subfolder must run before the delete step.
+
+  Automatable (wired into scripts/run-bruno-e2e.sh):
+    01 - get prep profile (public)
+    02 - patch prep profile answer (public)
+    03 - patch prep profile answers bulk (public)
+    04 - unlock prep profile question (admin)
+
+  Manual-only (kept for documentation, excluded from the e2e run):
+    05 - create prep profile upload url (public)
+    06 - put prep profile upload file (signed url)
+    07 - patch prep profile answer - save face photo metadata (public)
+    08 - patch prep profile answer - save gift face photo (public)
+
+  05-08 need a real Supabase upload target and Bruno "Developer Mode"
+  (request 06 reads a local file via `fs`, see its own docs), so they are
+  not safe to run unattended in CI.
+}

@@ -1,0 +1,40 @@
+meta {
+  name: 03 - patch prep profile answers bulk (public)
+  type: http
+  seq: 3
+}
+
+patch {
+  url: {{base_url}}/contracts/public/{{v4_contract_token}}/prep-profile/answers?phone={{v4_client_phone}}
+  body: json
+  auth: none
+}
+
+params:query {
+  phone: {{v4_client_phone}}
+}
+
+body:json {
+  {
+    "answers": [
+      { "questionId": "event_end_time", "value": "23:00" },
+      { "questionId": "venue_type", "value": "hotel" }
+    ]
+  }
+}
+
+tests {
+  test("saves both answers in one call", function () {
+    expect(res.getStatus()).to.equal(200);
+    const answers = res.getBody().answers;
+    expect(answers.event_end_time).to.equal("23:00");
+    expect(answers.venue_type).to.equal("hotel");
+    // From the previous request in this subfolder — bulk merges, not replaces.
+    expect(answers.event_start_time).to.equal("17:00");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

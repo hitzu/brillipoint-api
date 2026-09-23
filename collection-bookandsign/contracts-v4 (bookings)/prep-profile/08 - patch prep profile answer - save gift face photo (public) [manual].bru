@@ -1,0 +1,31 @@
+meta {
+  name: 08 - patch prep profile answer - save gift face photo (public) [manual]
+  type: http
+  seq: 8
+}
+
+patch {
+  url: {{base_url}}/contracts/public/{{v4_contract_token}}/prep-profile/answer?phone={{v4_client_phone}}
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "questionId": "social-n-1-gift_face_photo",
+    "value": {
+      "path": "{{prep_asset_path}}",
+      "mime": "{{prep_mime}}"
+    }
+  }
+}
+
+docs {
+  Manual-only, excluded from run-bruno-e2e.sh: depends on the uploaded asset
+  path from requests 05-06.
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

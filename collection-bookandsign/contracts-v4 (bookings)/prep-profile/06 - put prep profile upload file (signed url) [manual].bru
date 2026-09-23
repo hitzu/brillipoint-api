@@ -1,7 +1,7 @@
 meta {
-  name: put prep profile upload file (signed url)
+  name: 06 - put prep profile upload file (signed url) [manual]
   type: http
-  seq: 24
+  seq: 6
 }
 
 put {
@@ -40,8 +40,13 @@ script:pre-request {
   req.setBody(fileBuffer);
 }
 
+docs {
+  Manual-only, excluded from run-bruno-e2e.sh: needs Bruno Developer Mode
+  (`fs` access) and a real file on disk at `prep_file_path`. Run request 05
+  first to populate `{{prep_signed_url}}`.
+}
+
 settings {
   encodeUrl: true
   timeout: 0
 }
-

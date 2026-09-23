@@ -1,0 +1,40 @@
+meta {
+  name: 00c - create extra (setup)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/extras
+  body: json
+  auth: inherit
+}
+
+headers {
+  authorization: Bearer {{token}}
+}
+
+body:json {
+  {
+    "brandId": {{v4_brand_id}},
+    "name": "E2E contracts-v4 extra {{v4_run_id}}",
+    "price": 500
+  }
+}
+
+vars:post-response {
+  v4_extra_id: res.body.id
+}
+
+tests {
+  test("creates the extra used by this flow", function () {
+    expect(res.getStatus()).to.equal(201);
+    expect(res.getBody().id).to.be.a("number");
+    expect(res.getBody().brandId).to.equal(Number(bru.getVar("v4_brand_id")));
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

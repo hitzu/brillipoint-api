@@ -1,0 +1,71 @@
+meta {
+  name: 01 - create contract (packages + extras)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/contracts
+  body: json
+  auth: inherit
+}
+
+headers {
+  authorization: Bearer {{token}}
+}
+
+body:json {
+  {
+    "userId": {{e2e_user_id}},
+    "brandId": {{v4_brand_id}},
+    "sku": "v4-{{v4_run_id}}",
+    "clientName": "Cliente contracts-v4",
+    "clientPhone": "5215555550199",
+    "clientEmail": "v4-client-{{v4_run_id}}@example.com",
+    "packages": [
+      {
+        "packageId": {{v4_package_id}},
+        "quantity": 1,
+        "clientRef": "pkg-1"
+      }
+    ],
+    "extras": [
+      {
+        "extraId": {{v4_extra_id}},
+        "quantity": 1,
+        "packageClientRef": "pkg-1"
+      }
+    ]
+  }
+}
+
+script:post-response {
+  // Fixed (not per-run) so the prep-profile subfolder's ?phone= query keeps
+  // matching this contract's clientPhone across the whole run.
+  bru.setVar('v4_client_phone', '5215555550199');
+}
+
+vars:post-response {
+  v4_contract_id: res.body.id
+  v4_contract_token: res.body.token
+}
+
+tests {
+  test("creates the contract with no slot", function () {
+    expect(res.getStatus()).to.equal(201);
+    const body = res.getBody();
+    expect(body.id).to.be.a("number");
+    expect(body.token).to.be.a("string");
+    expect(body.status).to.equal("confirmed");
+  });
+
+  test("has no bookings yet", function () {
+    const body = res.getBody();
+    expect(body.bookings).to.be.an("array").that.is.empty;
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

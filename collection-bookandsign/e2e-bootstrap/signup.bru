@@ -33,6 +33,7 @@ script:pre-request {
 
 vars:post-response {
   token: res.body.accessAndRefreshToken.accessToken
+  e2e_user_id: res.body.userInfo.id
 }
 
 tests {

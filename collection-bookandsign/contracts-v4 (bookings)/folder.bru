@@ -1,0 +1,29 @@
+meta {
+  name: contracts-v4 (bookings)
+  seq: 21
+}
+
+auth {
+  mode: inherit
+}
+
+script:pre-request {
+  // One run-unique anchor for every request in this folder: sku/email/brand
+  // name must be unique per run so the flow is repeatable against the same
+  // DB without colliding with a previous run's rows (see
+  // collection-bookandsign/bookings/folder.bru for the same pattern).
+  //
+  // v4_booking_date is anchored far from the `bookings/` folder's own
+  // overlap-guard fixtures (2030-01-01 +/- ~600 days), so a booking created
+  // here can never collide with one created by that folder in the same run.
+  if (!bru.getVar('v4_run_id')) {
+    bru.setVar('v4_run_id', `${Date.now()}-${Math.floor(Math.random() * 1e8)}`);
+
+    const runOffsetDays =
+      (Math.floor(Date.now() / 1000) + Math.floor(Math.random() * 100000)) % 100000;
+    const DAY = 24 * 60 * 60 * 1000;
+    const base = Date.UTC(2033, 0, 1);
+    const iso = (ms) => new Date(ms).toISOString().slice(0, 10);
+    bru.setVar('v4_booking_date', iso(base + runOffsetDays * DAY));
+  }
+}

@@ -1,11 +1,11 @@
 meta {
-  name: patch prep profile answer - save face photo metadata (public)
+  name: 07 - patch prep profile answer - save face photo metadata (public) [manual]
   type: http
-  seq: 25
+  seq: 7
 }
 
 patch {
-  url: {{base_url}}/contracts/public/{{contract_token}}/prep-profile/answer?phone={{contract_phone}}
+  url: {{base_url}}/contracts/public/{{v4_contract_token}}/prep-profile/answer?phone={{v4_client_phone}}
   body: json
   auth: none
 }
@@ -24,6 +24,11 @@ body:json {
 
 vars:pre-request {
   prep_mime: image/webp
+}
+
+docs {
+  Manual-only, excluded from run-bruno-e2e.sh: depends on the uploaded asset
+  path from requests 05-06.
 }
 
 settings {

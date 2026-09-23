@@ -1,0 +1,52 @@
+meta {
+  name: 02 - create booking with contractId
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{base_url}}/bookings
+  body: json
+  auth: inherit
+}
+
+headers {
+  authorization: Bearer {{token}}
+}
+
+body:json {
+  {
+    "scheduleType": "exact",
+    "eventDate": "{{v4_booking_date}}",
+    "serviceStartsAt": "{{v4_booking_date}}T14:00:00-06:00",
+    "serviceEndsAt": "{{v4_booking_date}}T18:00:00-06:00",
+    "title": "contracts-v4 booking",
+    "purpose": "event",
+    "venueName": "Main hall",
+    "contractId": {{v4_contract_id}}
+  }
+}
+
+vars:post-response {
+  v4_booking_id: res.body.id
+}
+
+tests {
+  test("creates the booking linked to the contract", function () {
+    expect(res.getStatus()).to.equal(201);
+    const body = res.getBody();
+    expect(body.id).to.be.a("number");
+    expect(body.status).to.equal("confirmed");
+  });
+
+  test("embeds the contract summary", function () {
+    const body = res.getBody();
+    expect(body.contract).to.not.equal(null);
+    expect(body.contract.token).to.equal(bru.getVar("v4_contract_token"));
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

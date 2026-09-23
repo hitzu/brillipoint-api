@@ -1,13 +1,17 @@
 meta {
-  name: create prep profile upload url (public)
+  name: 05 - create prep profile upload url (public) [manual]
   type: http
-  seq: 22
+  seq: 5
 }
 
 post {
-  url: {{base_url}}/contracts/public/{{contract_token}}/prep-profile/upload-url?phone={{contract_phone}}
+  url: {{base_url}}/contracts/public/{{v4_contract_token}}/prep-profile/upload-url?phone={{v4_client_phone}}
   body: json
   auth: none
+}
+
+params:query {
+  phone: {{v4_client_phone}}
 }
 
 body:json {
@@ -19,8 +23,7 @@ body:json {
 }
 
 script:post-response {
-  // Saves response values for the next requests in this flow.
-  // Requires no special permissions.
+  // Saves response values for requests 06-08 in this flow.
   bru.setVar('prep_contract_id', res.body.contractId);
   bru.setVar('prep_bucket', res.body.bucket);
   bru.setVar('prep_asset_path', res.body.path);
@@ -29,8 +32,13 @@ script:post-response {
   bru.setVar('prep_signed_token', res.body.token);
 }
 
+docs {
+  Manual-only, excluded from run-bruno-e2e.sh: this returns a real Supabase
+  signed upload URL. Runnable on its own against a configured Supabase
+  bucket, but not safe to run unattended in CI.
+}
+
 settings {
   encodeUrl: true
   timeout: 0
 }
-
