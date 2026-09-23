@@ -1,5 +1,6 @@
-import { Expose } from 'class-transformer';
+import { Expose, Type } from 'class-transformer';
 import {
+  IsArray,
   IsEmail,
   IsEnum,
   IsNumber,
@@ -8,6 +9,7 @@ import {
 } from 'class-validator';
 
 import { CONTRACT_STATUS } from '../types/contract-status.types';
+import { ContractBookingSummaryDto } from './contract-booking-summary.dto';
 
 export class ContractDto {
   @Expose()
@@ -73,4 +75,9 @@ export class ContractDto {
   @Expose()
   @IsString()
   createdAt!: string;
+
+  @Expose()
+  @IsArray()
+  @Type(() => ContractBookingSummaryDto)
+  bookings!: ContractBookingSummaryDto[];
 }

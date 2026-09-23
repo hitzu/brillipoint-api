@@ -13,6 +13,7 @@ import { Package } from '../packages/entities/package.entity';
 import { CreatePaymentDto } from '../payments/dto/create-payment.dto';
 import { PaymentsService } from '../payments/payments.service';
 import { Payment } from '../payments/entities/payment.entity';
+import { Booking } from '../bookings/entities/booking.entity';
 import { Contract } from './entities/contract.entity';
 import { AddExtraDto } from './dto/add-extra.dto';
 import { AddItemDto } from './dto/add-item.dto';
@@ -73,7 +74,38 @@ export class ContractsService {
     private readonly contractSlotsRepository: Repository<ContractSlot>,
     @InjectRepository(Event)
     private readonly eventsRepository: Repository<Event>,
+    @InjectRepository(Booking)
+    private readonly bookingsRepository: Repository<Booking>,
   ) {}
+
+  private async findBookingsByContractId(
+    contractId: number,
+  ): Promise<Booking[]> {
+    return this.bookingsRepository.find({
+      where: { contractId },
+      order: { serviceStartsAt: 'ASC' },
+    });
+  }
+
+  private async findBookingsByContractIds(
+    contractIds: number[],
+  ): Promise<Map<number, Booking[]>> {
+    const byContractId = new Map<number, Booking[]>();
+    if (!contractIds.length) {
+      return byContractId;
+    }
+    const bookings = await this.bookingsRepository.find({
+      where: { contractId: In(contractIds) },
+      order: { serviceStartsAt: 'ASC' },
+    });
+    for (const booking of bookings) {
+      if (booking.contractId == null) continue;
+      const list = byContractId.get(booking.contractId) ?? [];
+      list.push(booking);
+      byContractId.set(booking.contractId, list);
+    }
+    return byContractId;
+  }
 
   private async recalculateTotals(
     contractId: number,
@@ -239,9 +271,12 @@ export class ContractsService {
     const savedContract = await this.contractsRepository.findOne({
       where: { id: contractId },
     });
-    return plainToInstance(ContractDto, savedContract, {
-      excludeExtraneousValues: true,
-    });
+    const bookings = await this.findBookingsByContractId(contractId);
+    return plainToInstance(
+      ContractDto,
+      { ...savedContract, bookings },
+      { excludeExtraneousValues: true },
+    );
   }
 
   private async setItems(
@@ -554,7 +589,7 @@ export class ContractsService {
     if (!contract) {
       throw new NotFoundException('Contract not found');
     }
-    const [items, extras, payments, paidAmount] = await Promise.all([
+    const [items, extras, payments, paidAmount, bookings] = await Promise.all([
       this.contractPackagesRepository.find({
         where: { contractId },
       }),
@@ -564,6 +599,7 @@ export class ContractsService {
       }),
       this.paymentsService.listPaymentsByContract(contractId),
       this.sumPayments(contractId),
+      this.findBookingsByContractId(contractId),
     ]);
     return plainToInstance(
       ContractDetailDto,
@@ -575,6 +611,7 @@ export class ContractsService {
         extras,
         payments,
         paidAmount,
+        bookings,
       },
       { excludeExtraneousValues: true },
     );
@@ -684,7 +721,7 @@ export class ContractsService {
 
     const contractId = contract.id;
 
-    const [packages, extras, payments, paidAmount] = await Promise.all([
+    const [packages, extras, payments, paidAmount, bookings] = await Promise.all([
       this.contractPackagesRepository.find({
         where: { contractId },
         relations: [
@@ -700,6 +737,7 @@ export class ContractsService {
       }),
       this.paymentsService.listPaymentsByContract(contractId),
       this.sumPayments(contractId),
+      this.findBookingsByContractId(contractId),
     ]);
 
     return plainToInstance(
@@ -711,6 +749,7 @@ export class ContractsService {
         extras,
         payments,
         paidAmount,
+        bookings,
       },
       { excludeExtraneousValues: true },
     );
@@ -773,9 +812,14 @@ export class ContractsService {
       )
       .getMany();
 
+    const bookingsByContractId = await this.findBookingsByContractIds(
+      contracts.map((c) => c.id),
+    );
+
     const contractsWithEventToken = contracts.map((c) => ({
       ...c,
       eventToken: c.event?.token ?? null,
+      bookings: bookingsByContractId.get(c.id) ?? [],
     }));
     return plainToInstance(ContractDto, contractsWithEventToken, {
       excludeExtraneousValues: true,

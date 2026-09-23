@@ -9,6 +9,7 @@ import {
 
 import { BaseTimeEntity } from '../../common/entities/base-time.entity';
 import { UseDto } from '../../common/dto/use-dto.decorator';
+import { Booking } from '../../bookings/entities/booking.entity';
 import { Payment } from '../../payments/entities/payment.entity';
 import { ContractDto } from '../dto/contract.dto';
 import { ContractExtra } from './contract-extra.entity';
@@ -113,6 +114,9 @@ export class Contract extends BaseTimeEntity {
 
   @OneToMany(() => Payment, (payment) => payment.contract)
   payments?: Payment[];
+
+  @OneToMany(() => Booking, (booking) => booking.contract)
+  bookings?: Booking[];
 
   @ManyToOne(() => User, (user) => user.contracts)
   @JoinColumn({ name: 'user_id' })

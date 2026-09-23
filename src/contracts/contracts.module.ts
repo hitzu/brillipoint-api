@@ -16,6 +16,7 @@ import { ContractsPreparationProfileService } from './preparation-profile/contra
 import { PrepProfileUploadsService } from './preparation-profile/prep-profile-uploads.service';
 import { Event } from '../events/entities/event.entity';
 import { PromotionsModule } from '../promotions/promotions.module';
+import { Booking } from '../bookings/entities/booking.entity';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { PromotionsModule } from '../promotions/promotions.module';
       ContractSlot,
       ContractPreparationProfile,
       Event,
+      Booking,
     ]),
   ],
   controllers: [ContractsController],

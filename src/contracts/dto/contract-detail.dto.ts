@@ -7,6 +7,7 @@ import { ContractDto } from './contract.dto';
 import { ContractExtraDto } from './contract-extra.dto';
 import { ContractPackageDto } from './contract-package.dto';
 import { ContractSlotDto } from './contractSlot.dto';
+import { ContractBookingSummaryDto } from './contract-booking-summary.dto';
 
 export class ContractDetailDto {
   @Expose()
@@ -45,4 +46,9 @@ export class ContractDetailDto {
   @IsArray()
   @Type(() => ContractSlotDto)
   contractSlots!: ContractSlotDto[];
+
+  @Expose()
+  @IsArray()
+  @Type(() => ContractBookingSummaryDto)
+  bookings!: ContractBookingSummaryDto[];
 }

@@ -46,6 +46,8 @@ import { Event } from '../events/entities/event.entity';
 import { EventFactory } from '../../test/factories/events/event.factory';
 import { EXTRA_STATUS } from '../extras/types/extras-status.types';
 import { Booking } from '../bookings/entities/booking.entity';
+import { BOOKING_STATUS } from '../bookings/constants/booking_status.enum';
+import { BookingFactory } from '../../test/factories/bookings/booking.factory';
 
 describe('ContractsService', () => {
   let service: ContractsService;
@@ -64,6 +66,7 @@ describe('ContractsService', () => {
   let eventFactory: EventFactory;
   let promotionFactory: PromotionFactory;
   let promotionPackageFactory: PromotionPackageFactory;
+  let bookingFactory: BookingFactory;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -152,6 +155,7 @@ describe('ContractsService', () => {
     eventFactory = new EventFactory(TestDataSource);
     promotionFactory = new PromotionFactory(TestDataSource);
     promotionPackageFactory = new PromotionPackageFactory(TestDataSource);
+    bookingFactory = new BookingFactory(TestDataSource);
   });
 
   describe('list', () => {
@@ -255,6 +259,64 @@ describe('ContractsService', () => {
       expect(found).toBeDefined();
       expect(found?.status).toBe(CONTRACT_STATUS.FINALIZED);
     });
+
+    it('should group bookings per contract when multiple contracts have different bookings', async () => {
+      const user = await userFactory.create();
+      const slotA = await slotFactory.create({
+        status: SLOT_STATUS.RESERVED,
+        period: SLOT_PERIOD.AM_BLOCK,
+      });
+      const slotB = await slotFactory.create({
+        status: SLOT_STATUS.RESERVED,
+        period: SLOT_PERIOD.PM_BLOCK,
+      });
+
+      const contractA = await contractsRepo.save(
+        contractsRepo.create({
+          userId: user.id,
+          sku: 'SKU-LIST-BOOKINGS-A',
+          token: 'list-token-bookings-a',
+          status: CONTRACT_STATUS.CONFIRMED,
+          slot: slotA,
+        }),
+      );
+      const contractB = await contractsRepo.save(
+        contractsRepo.create({
+          userId: user.id,
+          sku: 'SKU-LIST-BOOKINGS-B',
+          token: 'list-token-bookings-b',
+          status: CONTRACT_STATUS.CONFIRMED,
+          slot: slotB,
+        }),
+      );
+
+      const bookingA = await bookingFactory.create({
+        contractId: contractA.id,
+        eventDate: '2030-04-01',
+      });
+      const bookingB1 = await bookingFactory.create({
+        contractId: contractB.id,
+        eventDate: '2030-04-02',
+        serviceStartsAt: new Date('2030-04-02T09:00:00.000Z'),
+        serviceEndsAt: new Date('2030-04-02T12:00:00.000Z'),
+      });
+      const bookingB2 = await bookingFactory.create({
+        contractId: contractB.id,
+        eventDate: '2030-04-03',
+        serviceStartsAt: new Date('2030-04-03T09:00:00.000Z'),
+        serviceEndsAt: new Date('2030-04-03T12:00:00.000Z'),
+      });
+
+      const list = await service.list();
+
+      const foundA = list.find((c) => c.id === contractA.id);
+      const foundB = list.find((c) => c.id === contractB.id);
+
+      expect(foundA?.bookings.map((b) => b.id)).toEqual([bookingA.id]);
+      expect(foundB?.bookings.map((b) => b.id).sort()).toEqual(
+        [bookingB1.id, bookingB2.id].sort(),
+      );
+    });
   });
 
   describe('createContract', () => {
@@ -315,6 +377,36 @@ describe('ContractsService', () => {
         where: { contractId: result.id, slotId: slot.id },
       });
       expect(link).toBeDefined();
+    });
+
+    it('should return an empty bookings array on creation', async () => {
+      const user = await userFactory.create();
+      const brand = await brandFactory.create();
+      const pkg = await packageFactory.createForBrand(brand, {
+        basePrice: 100,
+      });
+      const slot = await slotFactory.create({
+        status: SLOT_STATUS.RESERVED,
+        period: SLOT_PERIOD.AM_BLOCK,
+      });
+
+      const packages: AddItemDto[] = [{ packageId: pkg.id, quantity: 1 }];
+      const dto: CreateContractFromSlotsDto = {
+        userId: user.id,
+        slotId: slot.id,
+        sku: 'SKU-TEST-BOOKINGS',
+        clientName: 'Ana',
+        clientPhone: null,
+        clientEmail: null,
+        subtotal: 0,
+        discountTotal: 0,
+        total: 100,
+        packages,
+      };
+
+      const result = await service.createContract(dto);
+
+      expect(result.bookings).toEqual([]);
     });
 
     it('should throw NotFoundException if slot is not found', async () => {
@@ -1149,6 +1241,77 @@ describe('ContractsService', () => {
       );
       expect(detail.paidAmount).toBeCloseTo(100);
     });
+
+    it('should return an empty bookings array when the contract has none', async () => {
+      const user = await userFactory.create();
+      const slot = await slotFactory.create({
+        eventDate: '2030-02-01',
+        period: SLOT_PERIOD.AM_BLOCK,
+        status: SLOT_STATUS.RESERVED,
+      });
+      const contract = await contractsRepo.save(
+        contractsRepo.create({
+          userId: user.id,
+          sku: 'SKU-DETAIL-NOBOOKING',
+          token: 'test-token-nobooking',
+          status: CONTRACT_STATUS.CONFIRMED,
+          slot,
+        }),
+      );
+
+      const detail = await service.getDetail(contract.id);
+
+      expect(detail.bookings).toEqual([]);
+    });
+
+    it('should include the contract bookings ordered by serviceStartsAt and exclude soft-deleted ones', async () => {
+      const user = await userFactory.create();
+      const slot = await slotFactory.create({
+        eventDate: '2030-02-01',
+        period: SLOT_PERIOD.AM_BLOCK,
+        status: SLOT_STATUS.RESERVED,
+      });
+      const contract = await contractsRepo.save(
+        contractsRepo.create({
+          userId: user.id,
+          sku: 'SKU-DETAIL-BOOKINGS',
+          token: 'test-token-bookings',
+          status: CONTRACT_STATUS.CONFIRMED,
+          slot,
+        }),
+      );
+
+      const later = await bookingFactory.create({
+        contractId: contract.id,
+        eventDate: '2030-03-02',
+        serviceStartsAt: new Date('2030-03-02T10:00:00.000Z'),
+        serviceEndsAt: new Date('2030-03-02T18:00:00.000Z'),
+        status: BOOKING_STATUS.CONFIRMED,
+      });
+      const earlier = await bookingFactory.create({
+        contractId: contract.id,
+        eventDate: '2030-03-01',
+        serviceStartsAt: new Date('2030-03-01T10:00:00.000Z'),
+        serviceEndsAt: new Date('2030-03-01T18:00:00.000Z'),
+        status: BOOKING_STATUS.CONFIRMED,
+      });
+      const deletedBooking = await bookingFactory.create({
+        contractId: contract.id,
+        eventDate: '2030-03-03',
+        serviceStartsAt: new Date('2030-03-03T10:00:00.000Z'),
+        serviceEndsAt: new Date('2030-03-03T18:00:00.000Z'),
+        status: BOOKING_STATUS.CONFIRMED,
+      });
+      await bookingsRepo.softDelete(deletedBooking.id);
+
+      const detail = await service.getDetail(contract.id);
+
+      expect(detail.bookings.map((b) => b.id)).toEqual([
+        earlier.id,
+        later.id,
+      ]);
+      expect(detail.bookings.find((b) => b.id === deletedBooking.id)).toBeUndefined();
+    });
   });
 
   describe('getDetailByToken', () => {
@@ -1219,6 +1382,33 @@ describe('ContractsService', () => {
       await expect(
         service.getDetailByToken('missing-public-token'),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('should include the contract bookings', async () => {
+      const user = await userFactory.create();
+      const slot = await slotFactory.create({
+        eventDate: '2030-01-01',
+        period: SLOT_PERIOD.AM_BLOCK,
+        status: SLOT_STATUS.RESERVED,
+      });
+      const contract = await contractsRepo.save(
+        contractsRepo.create({
+          userId: user.id,
+          sku: 'SKU-PUBLIC-BOOKINGS',
+          token: 'public-token-bookings',
+          status: CONTRACT_STATUS.CONFIRMED,
+          slot,
+        }),
+      );
+      const booking = await bookingFactory.create({
+        contractId: contract.id,
+        eventDate: '2030-01-01',
+      });
+
+      const detail = await service.getDetailByToken(contract.token);
+
+      expect(detail.bookings).toHaveLength(1);
+      expect(detail.bookings[0]?.id).toBe(booking.id);
     });
   });
 

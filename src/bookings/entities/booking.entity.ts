@@ -44,7 +44,10 @@ export class Booking extends BaseTimeEntity {
   @Column('integer', { name: 'contract_id', nullable: true })
   contractId: number | null = null;
 
-  @ManyToOne(() => Contract, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => Contract, (contract) => contract.bookings, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
   @JoinColumn({ name: 'contract_id' })
   contract?: Contract | null;
 }
