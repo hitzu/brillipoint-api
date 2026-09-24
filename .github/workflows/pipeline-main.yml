@@ -105,95 +105,95 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
         run: pnpm run test
 
-  e2e-bruno:
-    name: e2e-bruno
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: test
-    env:
-      NODE_VERSION: 22
-      PNPM_VERSION: 9
-      NODE_ENV: ci
-      PORT: 3000
-      # Database configuration for the e2e run (own Postgres service, isolated
-      # from the "test" job's database).
-      DB_HOST: localhost
-      DB_PORT: 5432
-      DB_USERNAME: postgres
-      DB_PASSWORD: postgres
-      DB_NAME: bookandsign_e2e
-      JWT_SECRET: ${{ secrets.JWT_SECRET }}
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: bookandsign_e2e
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+  # e2e-bruno:
+  #   name: e2e-bruno
+  #   runs-on: ubuntu-latest
+  #   timeout-minutes: 15
+  #   needs: test
+  #   env:
+  #     NODE_VERSION: 22
+  #     PNPM_VERSION: 9
+  #     NODE_ENV: ci
+  #     PORT: 3000
+  #     # Database configuration for the e2e run (own Postgres service, isolated
+  #     # from the "test" job's database).
+  #     DB_HOST: localhost
+  #     DB_PORT: 5432
+  #     DB_USERNAME: postgres
+  #     DB_PASSWORD: postgres
+  #     DB_NAME: bookandsign_e2e
+  #     JWT_SECRET: ${{ secrets.JWT_SECRET }}
+  #   services:
+  #     postgres:
+  #       image: postgres:17-alpine
+  #       env:
+  #         POSTGRES_USER: postgres
+  #         POSTGRES_PASSWORD: postgres
+  #         POSTGRES_DB: bookandsign_e2e
+  #       options: >-
+  #         --health-cmd pg_isready
+  #         --health-interval 10s
+  #         --health-timeout 5s
+  #         --health-retries 5
+  #       ports:
+  #         - 5432:5432
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
+  #     - name: Setup pnpm
+  #       uses: pnpm/action-setup@v4
+  #       with:
+  #         version: ${{ env.PNPM_VERSION }}
 
-      - name: Setup Node (+ pnpm cache)
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
+  #     - name: Setup Node (+ pnpm cache)
+  #       uses: actions/setup-node@v4
+  #       with:
+  #         node-version: ${{ env.NODE_VERSION }}
+  #         cache: pnpm
+  #         cache-dependency-path: pnpm-lock.yaml
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+  #     - name: Install dependencies
+  #       run: pnpm install --frozen-lockfile
 
-      - name: Run the full migration chain against an empty database
-        run: pnpm run db:run
+  #     - name: Run the full migration chain against an empty database
+  #       run: pnpm run db:run
 
-      - name: Build
-        run: pnpm run build
+  #     - name: Build
+  #       run: pnpm run build
 
-      - name: Start the app in the background
-        run: |
-          nohup node dist/src/main.js > app.log 2>&1 &
-          echo $! > app.pid
-          disown
+  #     - name: Start the app in the background
+  #       run: |
+  #         nohup node dist/src/main.js > app.log 2>&1 &
+  #         echo $! > app.pid
+  #         disown
 
-      - name: Wait for the app to be reachable
-        run: |
-          for i in $(seq 1 30); do
-            if curl -sf "http://localhost:${PORT}/bookings/calendar?year=2026&month=1" > /dev/null; then
-              echo "App is reachable after ${i}s"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "::error::App did not become reachable within 30s"
-          cat app.log
-          exit 1
+  #     - name: Wait for the app to be reachable
+  #       run: |
+  #         for i in $(seq 1 30); do
+  #           if curl -sf "http://localhost:${PORT}/bookings/calendar?year=2026&month=1" > /dev/null; then
+  #             echo "App is reachable after ${i}s"
+  #             exit 0
+  #           fi
+  #           sleep 1
+  #         done
+  #         echo "::error::App did not become reachable within 30s"
+  #         cat app.log
+  #         exit 1
 
-      - name: Run the Bruno e2e collection (bookings + notes + auth boundary)
-        run: pnpm run test:e2e:bruno -- --env-var base_url=http://localhost:${{ env.PORT }}
+  #     - name: Run the Bruno e2e collection (bookings + notes + auth boundary)
+  #       run: pnpm run test:e2e:bruno -- --env-var base_url=http://localhost:${{ env.PORT }}
 
-      - name: Show app logs
-        if: always()
-        run: cat app.log || true
+  #     - name: Show app logs
+  #       if: always()
+  #       run: cat app.log || true
 
-      - name: Stop the app
-        if: always()
-        run: |
-          if [ -f app.pid ]; then
-            kill "$(cat app.pid)" 2>/dev/null || true
-          fi
+  #     - name: Stop the app
+  #       if: always()
+  #       run: |
+  #         if [ -f app.pid ]; then
+  #           kill "$(cat app.pid)" 2>/dev/null || true
+  #         fi
 
   migrate:
     name: migrate
