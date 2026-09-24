@@ -36,11 +36,13 @@ export class EventResponseDto {
   @IsOptional()
   eventTypeId?: number | null;
 
+  /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @Expose()
   @ApiPropertyOptional({
     type: Number,
     description: 'Service type id',
     nullable: true,
+    deprecated: true,
   })
   @IsNumber()
   @IsOptional()
@@ -58,26 +60,30 @@ export class EventResponseDto {
   @IsOptional()
   albumPhrase?: string | null;
 
+  /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @Expose()
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ nullable: true, deprecated: true })
   @IsString()
   @IsOptional()
   venueName?: string | null;
 
+  /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @Expose()
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ nullable: true, deprecated: true })
   @IsString()
   @IsOptional()
   serviceLocationUrl?: string | null;
 
+  /** @deprecated Use the contract's EVENT booking (v2 events) instead. Removed in phase 2. */
   @Expose()
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ nullable: true, deprecated: true })
   @IsDate()
   @IsOptional()
   serviceStartsAt?: Date | null;
 
+  /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @Expose()
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ nullable: true, deprecated: true })
   @IsDate()
   @IsOptional()
   serviceEndsAt?: Date | null;
@@ -103,22 +109,36 @@ export class EventResponseDto {
   @IsOptional()
   eventThemeId?: number | null;
 
+  /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @Expose()
-  @ApiProperty({ type: String, description: 'Print template', default: 'polaroid_2' })
+  @ApiProperty({
+    type: String,
+    description: 'Print template',
+    default: 'polaroid_2',
+    deprecated: true,
+  })
   @IsString()
   printTemplate!: string;
 
+  /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @Expose()
-  @ApiPropertyOptional({ type: String, description: 'Decorative icon', nullable: true })
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Decorative icon',
+    nullable: true,
+    deprecated: true,
+  })
   @IsString()
   @IsOptional()
   decorativeIcon?: string | null;
 
+  /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @Expose()
   @ApiPropertyOptional({
     type: Object,
     description: 'Any valid JSON payload for print templates.',
     nullable: true,
+    deprecated: true,
   })
   @IsOptional()
   printTemplates?: JsonValue;
@@ -136,8 +156,9 @@ export class EventResponseDto {
   @Type(() => EventThemeDto)
   eventTheme: EventThemeDto
 
+  /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @Expose()
-  @ApiProperty()
+  @ApiProperty({ deprecated: true })
   @Type(() => ServiceTypeDto)
   serviceType: ServiceTypeDto
 }

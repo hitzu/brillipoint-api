@@ -1,0 +1,30 @@
+meta {
+  name: get event by token
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{base_url}}/v2/events/{{event_token}}
+  body: none
+  auth: inherit
+}
+
+headers {
+  ~Authorization: Bearer {{token}}
+}
+
+vars:pre-request {
+  event_token: 80ac24ca-22f2-4e0c-9941-3bdc057dbb65
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Public endpoint. See the `v2` folder docs: schedule/status come only
+  from the contract's EVENT booking, null/"finished" when there is none —
+  this is also what the session and gallery public responses now use.
+}

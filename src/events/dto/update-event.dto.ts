@@ -12,10 +12,12 @@ export class UpdateEventDto {
   @IsOptional()
   eventTypeId?: number;
 
+  /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @ApiPropertyOptional({
     type: Number,
     description: 'Service type id',
     nullable: true,
+    deprecated: true,
   })
   @IsNumber()
   @IsOptional()
@@ -37,36 +39,44 @@ export class UpdateEventDto {
   @IsOptional()
   albumPhrase?: string;
 
+  /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @ApiPropertyOptional({
     type: String,
     description: 'Nombre del salón',
+    deprecated: true,
   })
   @IsString()
   @IsOptional()
   venueName?: string;
 
+  /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @ApiPropertyOptional({
     type: String,
     description: 'Link de ubicación para el servicio',
+    deprecated: true,
   })
   @IsUrl({ require_protocol: true })
   @IsOptional()
   serviceLocationUrl?: string;
 
+  /** @deprecated Use the contract's EVENT booking (v2 events) instead. Removed in phase 2. */
   @ApiPropertyOptional({
     type: String,
     format: 'date-time',
     description: 'Hora de inicio del servicio (ISO 8601)',
+    deprecated: true,
   })
   @IsOptional()
   @Type(() => Date)
   @IsDate()
   serviceStartsAt?: Date;
 
+  /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @ApiPropertyOptional({
     type: String,
     format: 'date-time',
     description: 'Hora de fin del servicio (ISO 8601)',
+    deprecated: true,
   })
   @IsOptional()
   @Type(() => Date)
@@ -91,23 +101,28 @@ export class UpdateEventDto {
   @IsOptional()
   photoCount?: number;
 
+  /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @ApiPropertyOptional({
     type: String,
     description: 'Plantilla de impresión (polaroid_2 | keychain_2)',
+    deprecated: true,
   })
   @IsString()
   @IsOptional()
   printTemplate?: string;
 
+  /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @ApiPropertyOptional({
     type: String,
     description: 'Ícono decorativo (rings | balloon | graduation | baby | xv | null)',
     nullable: true,
+    deprecated: true,
   })
   @IsString()
   @IsOptional()
   decorativeIcon?: string | null;
 
+  /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @ApiPropertyOptional({
     type: Object,
     description: 'Any valid JSON payload for print templates.',
@@ -116,6 +131,7 @@ export class UpdateEventDto {
       { template_id: 'polaroid' },
       { template_id: 'polaroid' },
     ],
+    deprecated: true,
   })
   @IsOptional()
   printTemplates?: JsonValue;

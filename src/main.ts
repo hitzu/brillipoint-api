@@ -10,6 +10,7 @@ import {
   SwaggerModule,
 } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
+import { enableApiVersioning } from './common/versioning/enable-api-versioning';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
@@ -23,6 +24,8 @@ async function bootstrap() {
   );
 
   app.useLogger(app.get(Logger));
+
+  enableApiVersioning(app);
 
   // Enable CORS
   const corsOrigin = process.env.CORS_ORIGIN;

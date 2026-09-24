@@ -6,3 +6,19 @@ meta {
 auth {
   mode: inherit
 }
+
+docs {
+  v1 (this folder). Payloads and responses are unchanged, but the schedule/
+  location fields below are deprecated (Swagger `deprecated: true` + JSDoc
+  `@deprecated`) and will be dropped in phase 2 once schedule/location fully
+  moves to the bookings domain — see `odd/tasks/event-fields-deprecation.md`:
+
+    serviceStartsAt, serviceEndsAt, venueName, serviceLocationUrl,
+    serviceTypeId, printTemplate, printTemplates, decorativeIcon
+
+  New integrations should read the `v2` subfolder instead, whose responses
+  resolve schedule/location only from the contract's EVENT booking (see its
+  own docs). v1 create/update still accept the deprecated fields above (do
+  not remove them from existing client code yet), they are just no longer
+  the source of truth for status or for v2/session/gallery display.
+}

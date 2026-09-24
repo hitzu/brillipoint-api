@@ -11,6 +11,7 @@ import { AppDataSource as TestDataSource } from '../config/database/data-source'
 import { EXCEPTION_RESPONSE } from '../config/errors/exception-response.config';
 import { ContractFactory } from '../../test/factories/contracts/contract.factory';
 import { EventFactory } from '../../test/factories/events/event.factory';
+import { BookingFactory } from '../../test/factories/bookings/booking.factory';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { Event } from './entities/event.entity';
@@ -18,10 +19,13 @@ import { EventsService } from './events.service';
 import { EventTypeFactory } from '../../test/factories/events/event-type.factory'
 import { ServiceTypeFactory } from '../../test/factories/events/service-type.factory';
 import { PinoLogger } from 'nestjs-pino';
+import { Booking } from '../bookings/entities/booking.entity';
+import { BOOKING_PURPOSE } from '../bookings/constants/booking_purpose.enum';
 
 describe('EventsService', () => {
   let service: EventsService;
   let eventFactory: EventFactory;
+  let bookingFactory: BookingFactory;
 
   beforeEach(async () => {
 
@@ -41,6 +45,10 @@ describe('EventsService', () => {
           useValue: TestDataSource.getRepository(Event),
         },
         {
+          provide: getRepositoryToken(Booking),
+          useValue: TestDataSource.getRepository(Booking),
+        },
+        {
           provide: PinoLogger,
           useValue: loggerMock,
         },
@@ -49,6 +57,7 @@ describe('EventsService', () => {
 
     service = module.get<EventsService>(EventsService);
     eventFactory = new EventFactory(TestDataSource);
+    bookingFactory = new BookingFactory(TestDataSource);
   });
 
   describe('printTemplates DTO validation', () => {
@@ -393,28 +402,26 @@ describe('EventsService', () => {
   });
 
   describe('getPublicEventStatus', () => {
-    it('should return undefined when serviceStartsAt is null', () => {
-      expect(
-        service.getPublicEventStatus({ serviceStartsAt: null }),
-      ).toBe('finished')
+    it('should return finished when there is no EVENT booking', () => {
+      expect(service.getPublicEventStatus(null)).toBe('finished');
     });
 
-    it('should return undefined before the 30-day cutoff', () => {
+    it('should return active before the 30-day cutoff', () => {
       const serviceStartsAt = new Date('2026-05-01T12:00:00.000Z');
       const now = new Date('2026-05-31T11:59:59.999Z');
 
       expect(
-        service.getPublicEventStatus({ serviceStartsAt }, now),
-      ).toBe("active");
+        service.getPublicEventStatus({ serviceStartsAt } as Booking, now),
+      ).toBe('active');
     });
 
-    it('should return undefined exactly at the 30-day cutoff', () => {
+    it('should return active exactly at the 30-day cutoff', () => {
       const serviceStartsAt = new Date('2026-05-01T12:00:00.000Z');
       const now = new Date('2026-05-31T12:00:00.000Z');
 
       expect(
-        service.getPublicEventStatus({ serviceStartsAt }, now),
-      ).toBe("active");
+        service.getPublicEventStatus({ serviceStartsAt } as Booking, now),
+      ).toBe('active');
     });
 
     it('should return finished after the 30-day cutoff', () => {
@@ -422,8 +429,235 @@ describe('EventsService', () => {
       const now = new Date('2026-05-31T12:00:00.001Z');
 
       expect(
-        service.getPublicEventStatus({ serviceStartsAt }, now),
+        service.getPublicEventStatus({ serviceStartsAt } as Booking, now),
       ).toBe('finished');
+    });
+  });
+
+  describe('getByTokenV2', () => {
+    it('should resolve schedule/venue/mapsUrl from the contract EVENT booking when one exists', async () => {
+      // Arrange
+      const contractFactory = new ContractFactory(TestDataSource);
+      const contract = await contractFactory.create();
+      const event = await eventFactory.create({
+        contractId: contract.id,
+        serviceStartsAt: new Date('2020-01-01T10:00:00.000Z'),
+        serviceEndsAt: new Date('2020-01-01T14:00:00.000Z'),
+        venueName: 'Legacy venue',
+        serviceLocationUrl: 'https://maps.example.com/legacy',
+      });
+      const booking = await bookingFactory.create({
+        contractId: contract.id,
+        purpose: BOOKING_PURPOSE.EVENT,
+        serviceStartsAt: new Date('2026-06-01T10:00:00.000Z'),
+        serviceEndsAt: new Date('2026-06-01T18:00:00.000Z'),
+        venueName: 'Booking venue',
+        mapsUrl: 'https://maps.example.com/booking',
+      });
+
+      // Act
+      const result = await service.getByTokenV2(event.token);
+
+      // Assert
+      expect(result).toMatchObject({
+        serviceStartsAt: booking.serviceStartsAt,
+        serviceEndsAt: booking.serviceEndsAt,
+        venueName: 'Booking venue',
+        mapsUrl: 'https://maps.example.com/booking',
+        bookingId: booking.id,
+      });
+    });
+
+    it('should return null schedule/venue/location and no bookingId when the contract has no EVENT booking, ignoring the legacy event fields', async () => {
+      // Arrange
+      const contractFactory = new ContractFactory(TestDataSource);
+      const contract = await contractFactory.create();
+      const event = await eventFactory.create({
+        contractId: contract.id,
+        serviceStartsAt: new Date('2026-05-01T10:00:00.000Z'),
+        venueName: 'Legacy venue',
+        serviceLocationUrl: 'https://maps.example.com/legacy',
+      });
+
+      // Act
+      const result = await service.getByTokenV2(event.token);
+
+      // Assert
+      expect(result).toMatchObject({
+        serviceStartsAt: null,
+        serviceEndsAt: null,
+        venueName: null,
+        mapsUrl: null,
+        bookingId: null,
+        status: 'finished',
+      });
+    });
+
+    it('should return no schedule when the contract only has a non-EVENT booking', async () => {
+      // Arrange
+      const contractFactory = new ContractFactory(TestDataSource);
+      const contract = await contractFactory.create();
+      const event = await eventFactory.create({ contractId: contract.id });
+      await bookingFactory.create({
+        contractId: contract.id,
+        purpose: BOOKING_PURPOSE.SCOUTING,
+      });
+
+      // Act
+      const result = await service.getByTokenV2(event.token);
+
+      // Assert
+      expect(result.bookingId).toBeNull();
+      expect(result.serviceStartsAt).toBeNull();
+    });
+
+    it('should ignore a soft-deleted EVENT booking and return no schedule', async () => {
+      // Arrange
+      const contractFactory = new ContractFactory(TestDataSource);
+      const contract = await contractFactory.create();
+      const event = await eventFactory.create({ contractId: contract.id });
+      const booking = await bookingFactory.create({
+        contractId: contract.id,
+        purpose: BOOKING_PURPOSE.EVENT,
+      });
+      await TestDataSource.getRepository(Booking).softDelete(booking.id);
+
+      // Act
+      const result = await service.getByTokenV2(event.token);
+
+      // Assert
+      expect(result.bookingId).toBeNull();
+      expect(result.serviceStartsAt).toBeNull();
+      expect(result.status).toBe('finished');
+    });
+
+    it('should compute status from the booking serviceStartsAt, ignoring the stale event one', async () => {
+      // Arrange
+      const contractFactory = new ContractFactory(TestDataSource);
+      const contract = await contractFactory.create();
+      const event = await eventFactory.create({
+        contractId: contract.id,
+        serviceStartsAt: new Date('2020-01-01T10:00:00.000Z'),
+      });
+      await bookingFactory.create({
+        contractId: contract.id,
+        purpose: BOOKING_PURPOSE.EVENT,
+        serviceStartsAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        serviceEndsAt: new Date(Date.now() + 28 * 60 * 60 * 1000),
+      });
+
+      // Act
+      const result = await service.getByTokenV2(event.token);
+
+      // Assert
+      expect(result.status).toBe('active');
+    });
+
+    it('should throw NotFoundException when token does not exist', async () => {
+      await expect(
+        service.getByTokenV2('11111111-1111-1111-1111-111111111111'),
+      ).rejects.toEqual(new NotFoundException(EXCEPTION_RESPONSE.EVENT_NOT_FOUND));
+    });
+  });
+
+  describe('getByIdV2 / getByKeyV2', () => {
+    it('should resolve schedule from the EVENT booking when fetching by id', async () => {
+      // Arrange
+      const contractFactory = new ContractFactory(TestDataSource);
+      const contract = await contractFactory.create();
+      const event = await eventFactory.create({ contractId: contract.id });
+      const booking = await bookingFactory.create({
+        contractId: contract.id,
+        purpose: BOOKING_PURPOSE.EVENT,
+      });
+
+      // Act
+      const result = await service.getByIdV2(event.id);
+
+      // Assert
+      expect(result.bookingId).toBe(booking.id);
+      expect(result.serviceStartsAt).toEqual(booking.serviceStartsAt);
+    });
+
+    it('should resolve schedule from the EVENT booking when fetching by key', async () => {
+      // Arrange
+      const contractFactory = new ContractFactory(TestDataSource);
+      const contract = await contractFactory.create();
+      const event = await eventFactory.create({ contractId: contract.id });
+      const booking = await bookingFactory.create({
+        contractId: contract.id,
+        purpose: BOOKING_PURPOSE.EVENT,
+      });
+
+      // Act
+      const result = await service.getByKeyV2(event.key);
+
+      // Assert
+      expect(result.bookingId).toBe(booking.id);
+      expect(result.serviceStartsAt).toEqual(booking.serviceStartsAt);
+    });
+  });
+
+  describe('listV2', () => {
+    it('should resolve each event independently by its own contract booking', async () => {
+      // Arrange
+      const contractFactory = new ContractFactory(TestDataSource);
+      const contractWithBooking = await contractFactory.create();
+      const contractWithoutBooking = await contractFactory.create();
+      const eventWithBooking = await eventFactory.create({
+        contractId: contractWithBooking.id,
+      });
+      const eventWithoutBooking = await eventFactory.create({
+        contractId: contractWithoutBooking.id,
+      });
+      const booking = await bookingFactory.create({
+        contractId: contractWithBooking.id,
+        purpose: BOOKING_PURPOSE.EVENT,
+      });
+
+      // Act
+      const result = await service.listV2();
+
+      // Assert
+      const resolvedWithBooking = result.find((e) => e.id === eventWithBooking.id);
+      const resolvedWithoutBooking = result.find((e) => e.id === eventWithoutBooking.id);
+      expect(resolvedWithBooking).toMatchObject({
+        bookingId: booking.id,
+      });
+      expect(resolvedWithoutBooking).toMatchObject({
+        bookingId: null,
+        serviceStartsAt: null,
+      });
+    });
+  });
+
+  describe('findEventBooking', () => {
+    it('should return the contract EVENT booking when one exists', async () => {
+      // Arrange
+      const contractFactory = new ContractFactory(TestDataSource);
+      const contract = await contractFactory.create();
+      const booking = await bookingFactory.create({
+        contractId: contract.id,
+        purpose: BOOKING_PURPOSE.EVENT,
+      });
+
+      // Act
+      const result = await service.findEventBooking(contract.id);
+
+      // Assert
+      expect(result?.id).toBe(booking.id);
+    });
+
+    it('should return null when the contract has no EVENT booking', async () => {
+      // Arrange
+      const contractFactory = new ContractFactory(TestDataSource);
+      const contract = await contractFactory.create();
+
+      // Act
+      const result = await service.findEventBooking(contract.id);
+
+      // Assert
+      expect(result).toBeNull();
     });
   });
 });

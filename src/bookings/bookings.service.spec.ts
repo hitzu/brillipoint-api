@@ -386,6 +386,101 @@ describe('BookingsService', () => {
       ]);
     });
 
+    it('throws ConflictException when a second EVENT booking is created for the same contract', async () => {
+      // Arrange
+      const contract = await contractFactory.create();
+      const firstEventDto: CreateBookingDto = {
+        ...baseDto(),
+        contractId: contract.id,
+        purpose: BOOKING_PURPOSE.EVENT,
+      };
+      await service.create(firstEventDto);
+      const secondEventDto: CreateBookingDto = {
+        ...baseDto(),
+        contractId: contract.id,
+        purpose: BOOKING_PURPOSE.EVENT,
+        serviceStartsAt: new Date('2026-10-05T14:00:00.000Z'),
+        serviceEndsAt: new Date('2026-10-05T18:00:00.000Z'),
+      };
+
+      // Act + Assert
+      await expect(service.create(secondEventDto)).rejects.toEqual(
+        new ConflictException(
+          EXCEPTION_RESPONSE.BOOKING_CONTRACT_ALREADY_HAS_EVENT,
+        ),
+      );
+    });
+
+    it('creates EVENT bookings on different contracts', async () => {
+      // Arrange
+      const contractA = await contractFactory.create();
+      const contractB = await contractFactory.create();
+      const eventDtoA: CreateBookingDto = {
+        ...baseDto(),
+        contractId: contractA.id,
+        purpose: BOOKING_PURPOSE.EVENT,
+      };
+      await service.create(eventDtoA);
+      const eventDtoB: CreateBookingDto = {
+        ...baseDto(),
+        contractId: contractB.id,
+        purpose: BOOKING_PURPOSE.EVENT,
+        serviceStartsAt: new Date('2026-10-05T14:00:00.000Z'),
+        serviceEndsAt: new Date('2026-10-05T18:00:00.000Z'),
+      };
+
+      // Act
+      const result = await service.create(eventDtoB);
+
+      // Assert
+      expect(result.purpose).toBe(BOOKING_PURPOSE.EVENT);
+    });
+
+    it('creates a booking with a different purpose on a contract that already has an EVENT booking', async () => {
+      // Arrange
+      const contract = await contractFactory.create();
+      const eventDto: CreateBookingDto = {
+        ...baseDto(),
+        contractId: contract.id,
+        purpose: BOOKING_PURPOSE.EVENT,
+      };
+      await service.create(eventDto);
+      const scoutingDto: CreateBookingDto = {
+        ...baseDto(),
+        contractId: contract.id,
+        purpose: BOOKING_PURPOSE.SCOUTING,
+        serviceStartsAt: new Date('2026-10-05T14:00:00.000Z'),
+        serviceEndsAt: new Date('2026-10-05T18:00:00.000Z'),
+      };
+
+      // Act
+      const result = await service.create(scoutingDto);
+
+      // Assert
+      expect(result.purpose).toBe(BOOKING_PURPOSE.SCOUTING);
+    });
+
+    it('creates EVENT bookings with no contractId without restriction', async () => {
+      // Arrange
+      const firstDto: CreateBookingDto = {
+        ...baseDto(),
+        purpose: BOOKING_PURPOSE.EVENT,
+      };
+      await service.create(firstDto);
+      const secondDto: CreateBookingDto = {
+        ...baseDto(),
+        purpose: BOOKING_PURPOSE.EVENT,
+        serviceStartsAt: new Date('2026-10-05T14:00:00.000Z'),
+        serviceEndsAt: new Date('2026-10-05T18:00:00.000Z'),
+      };
+
+      // Act
+      const result = await service.create(secondDto);
+
+      // Assert
+      expect(result.purpose).toBe(BOOKING_PURPOSE.EVENT);
+    });
+
     it('rejects every later booking on a blocked date', async () => {
       // Arrange
       await bookingFactory.create({
@@ -598,6 +693,57 @@ describe('BookingsService', () => {
       await expect(
         service.reschedule(999999, rescheduleDto()),
       ).rejects.toEqual(new NotFoundException(EXCEPTION_RESPONSE.BOOKING_NOT_FOUND));
+    });
+
+    it('throws ConflictException when rescheduling a booking to EVENT while the contract already has another EVENT booking', async () => {
+      // Arrange
+      const contract = await contractFactory.create();
+      await bookingFactory.create({
+        contractId: contract.id,
+        purpose: BOOKING_PURPOSE.EVENT,
+        serviceStartsAt: new Date('2026-09-01T10:00:00.000Z'),
+        serviceEndsAt: new Date('2026-09-01T14:00:00.000Z'),
+      });
+      const other = await bookingFactory.create({
+        contractId: contract.id,
+        purpose: BOOKING_PURPOSE.OTHER,
+        serviceStartsAt: new Date('2026-09-02T10:00:00.000Z'),
+        serviceEndsAt: new Date('2026-09-02T14:00:00.000Z'),
+      });
+      const dto: RescheduleBookingDto = {
+        ...rescheduleDto(),
+        purpose: BOOKING_PURPOSE.EVENT,
+        serviceStartsAt: new Date('2026-11-05T15:00:00.000Z'),
+        serviceEndsAt: new Date('2026-11-05T19:00:00.000Z'),
+      };
+
+      // Act + Assert
+      await expect(service.reschedule(other.id, dto)).rejects.toEqual(
+        new ConflictException(
+          EXCEPTION_RESPONSE.BOOKING_CONTRACT_ALREADY_HAS_EVENT,
+        ),
+      );
+    });
+
+    it('allows rescheduling the EVENT booking itself while keeping purpose EVENT', async () => {
+      // Arrange
+      const contract = await contractFactory.create();
+      const booking = await bookingFactory.create({
+        contractId: contract.id,
+        purpose: BOOKING_PURPOSE.EVENT,
+        serviceStartsAt: new Date('2026-09-01T10:00:00.000Z'),
+        serviceEndsAt: new Date('2026-09-01T14:00:00.000Z'),
+      });
+      const dto: RescheduleBookingDto = {
+        ...rescheduleDto(),
+        purpose: BOOKING_PURPOSE.EVENT,
+      };
+
+      // Act
+      const result = await service.reschedule(booking.id, dto);
+
+      // Assert
+      expect(result.purpose).toBe(BOOKING_PURPOSE.EVENT);
     });
   });
 });

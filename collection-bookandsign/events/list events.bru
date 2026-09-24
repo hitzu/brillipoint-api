@@ -18,3 +18,9 @@ settings {
   encodeUrl: true
   timeout: 0
 }
+
+docs {
+  v1: unchanged payload, still includes the deprecated schedule fields
+  (see the `events` folder docs). Prefer `v2/list events` for responses
+  whose schedule/status come only from each contract's EVENT booking.
+}

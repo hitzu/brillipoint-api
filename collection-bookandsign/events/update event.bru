@@ -16,18 +16,7 @@ headers {
 
 body:json {
   {
-    "venueName": "Salón Nuevo",
-    "serviceTypeId": 1,
-    "serviceStartsAt": "2026-06-15T19:00:00.000Z",
-    "serviceEndsAt": "2026-06-16T03:00:00.000Z",
-    "photoCount": 4,
-    "printTemplate": "polaroid_2",
-    "decorativeIcon": "rings",
-    "printTemplates": [
-      { "type": "polaroid", "template": "polaroid_2", "icon": "rings" },
-      { "type": "keychain", "template": "keychain_2", "icon": "rings" },
-      { "type": "polaroid", "template": "polaroid_2", "icon": "rings" }
-    ]
+    "photoCount": 4
   }
 }
 
@@ -38,4 +27,13 @@ vars:pre-request {
 settings {
   encodeUrl: true
   timeout: 0
+}
+
+docs {
+  Deprecated fields removed from this example body:
+  venueName, serviceTypeId, serviceStartsAt, serviceEndsAt, printTemplate,
+  decorativeIcon, printTemplates (see the `events` folder docs). v1 still
+  accepts them — they are just no longer the source of truth for schedule/
+  status. To change an event's schedule/venue, update its EVENT booking
+  instead (`bookings` collection).
 }

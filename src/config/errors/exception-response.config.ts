@@ -43,6 +43,7 @@ enum ErrorMessages {
   BOOKING_NOT_FOUND = 'BOOKING_NOT_FOUND',
   CONTRACT_NOT_FOUND = 'CONTRACT_NOT_FOUND',
   BOOKING_OVERLAP = 'BOOKING_OVERLAP',
+  BOOKING_CONTRACT_ALREADY_HAS_EVENT = 'BOOKING_CONTRACT_ALREADY_HAS_EVENT',
 }
 
 export const EXCEPTION_RESPONSE: Record<
@@ -225,5 +226,9 @@ export const EXCEPTION_RESPONSE: Record<
   [ErrorMessages.BOOKING_OVERLAP]: {
     code: 44,
     message: 'booking overlaps an existing booking',
+  },
+  [ErrorMessages.BOOKING_CONTRACT_ALREADY_HAS_EVENT]: {
+    code: 45,
+    message: 'this contract already has an event booking',
   },
 };

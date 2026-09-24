@@ -14,10 +14,14 @@ import { EventsService } from './events.service';
 import { ServiceTypeService } from './service-type.service';
 import { EventAnalyticsController } from './analytics/event-analytics.controller';
 import { EventAnalyticsService } from './analytics/event-analytics.service';
+import { EventsV2Controller } from './v2/events-v2.controller';
+import { Booking } from '../bookings/entities/booking.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Event, EventType, ServiceType, EventPhrase, EventTheme, EventAnalytic])],
-  controllers: [EventsController, EventAnalyticsController],
+  imports: [
+    TypeOrmModule.forFeature([Event, EventType, ServiceType, EventPhrase, EventTheme, EventAnalytic, Booking]),
+  ],
+  controllers: [EventsController, EventsV2Controller, EventAnalyticsController],
   providers: [EventsService, EventTypeService, ServiceTypeService, EventPhrasesService, EventThemeService, EventAnalyticsService],
   exports: [EventsService, EventAnalyticsService],
 })

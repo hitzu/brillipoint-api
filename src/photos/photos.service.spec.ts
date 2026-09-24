@@ -14,6 +14,7 @@ import { PhotoFactory } from '../../test/factories/photos/photo.factory';
 import { Event } from '../events/entities/event.entity';
 import { Photo } from './entities/photo.entity';
 import { EventsService } from '../events/events.service';
+import { Booking } from '../bookings/entities/booking.entity';
 import { PhotosService } from './photos.service';
 import { PinoLogger } from 'nestjs-pino';
 
@@ -76,6 +77,10 @@ describe('PhotosService', () => {
         {
           provide: getRepositoryToken(Event),
           useValue: TestDataSource.getRepository(Event),
+        },
+        {
+          provide: getRepositoryToken(Booking),
+          useValue: TestDataSource.getRepository(Booking),
         },
         {
           provide: PinoLogger,

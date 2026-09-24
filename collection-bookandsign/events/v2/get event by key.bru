@@ -1,0 +1,29 @@
+meta {
+  name: get event by key
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/v2/events/by-key/{{event_key}}
+  body: none
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{token}}
+}
+
+vars:pre-request {
+  event_key: 015
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  See the `v2` folder docs: schedule/status come only from the contract's
+  EVENT booking, null/"finished" when there is none.
+}

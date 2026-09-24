@@ -8,11 +8,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { plainToInstance } from 'class-transformer';
 import { PinoLogger } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
-import { QueryFailedError, Repository } from 'typeorm';
+import { In, QueryFailedError, Repository } from 'typeorm';
 import { EXCEPTION_RESPONSE } from '../config/errors/exception-response.config';
 import { isUniqueViolation } from '../config/errors/exceptions-handler';
+import { Booking } from '../bookings/entities/booking.entity';
+import { BOOKING_PURPOSE } from '../bookings/constants/booking_purpose.enum';
 import { CreateEventDto } from './dto/create-event.dto';
 import { EventResponseDto } from './dto/event-response.dto';
+import { EventV2ResponseDto } from './dto/v2/event-v2-response.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { Event } from './entities/event.entity';
 
@@ -24,6 +27,8 @@ export class EventsService {
   constructor(
     @InjectRepository(Event)
     private readonly eventRepository: Repository<Event>,
+    @InjectRepository(Booking)
+    private readonly bookingRepository: Repository<Booking>,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(EventsService.name);
@@ -180,18 +185,119 @@ export class EventsService {
       .getOne();
   }
 
+  /**
+   * `finished` when the contract has no EVENT booking, or when the
+   * booking's `serviceStartsAt` is more than 30 days in the past;
+   * `active` otherwise. See "Phase 1b" in
+   * `odd/tasks/event-fields-deprecation.md`: the booking is the only
+   * source of schedule/status — there is no event-field fallback.
+   */
   getPublicEventStatus(
-    event: { serviceStartsAt?: Date | null },
+    booking: { serviceStartsAt: Date } | null,
     now: Date = new Date(),
   ): 'finished' | 'active' {
-    if (event.serviceStartsAt == null) {
+    if (booking == null) {
       return 'finished';
     }
 
     const finishedAt = new Date(
-      event.serviceStartsAt.getTime() + PUBLIC_EVENT_FINISHED_AFTER_DAYS * MS_PER_DAY,
+      booking.serviceStartsAt.getTime() + PUBLIC_EVENT_FINISHED_AFTER_DAYS * MS_PER_DAY,
     );
 
     return now.getTime() > finishedAt.getTime() ? 'finished' : 'active';
+  }
+
+  /** Single (non-soft-deleted) EVENT booking for a contract, or null. */
+  async findEventBooking(contractId: number): Promise<Booking | null> {
+    return this.bookingRepository.findOne({
+      where: { contractId, purpose: BOOKING_PURPOSE.EVENT },
+    });
+  }
+
+  // ─── v2 read model ─────────────────────────────────────────────────────
+  // Schedule/venue/mapsUrl come only from the contract's EVENT booking; an
+  // event with no EVENT booking has null schedule/location and is always
+  // `finished`. See `odd/tasks/event-fields-deprecation.md`, "Phase 1b".
+
+  async getByTokenV2(token: string): Promise<EventV2ResponseDto> {
+    const event = await this.eventRepository.findOne({
+      where: { token },
+      relations: { eventTheme: true },
+    });
+    if (!event) {
+      throw new NotFoundException(EXCEPTION_RESPONSE.EVENT_NOT_FOUND);
+    }
+    const booking = await this.findEventBooking(event.contractId);
+    return this.toEventV2ResponseDto(event, booking);
+  }
+
+  async getByIdV2(id: number): Promise<EventV2ResponseDto> {
+    const event = await this.eventRepository.findOne({
+      where: { id },
+      relations: { eventTheme: true },
+    });
+    if (!event) {
+      throw new NotFoundException(EXCEPTION_RESPONSE.EVENT_NOT_FOUND);
+    }
+    const booking = await this.findEventBooking(event.contractId);
+    return this.toEventV2ResponseDto(event, booking);
+  }
+
+  async getByKeyV2(key: string): Promise<EventV2ResponseDto> {
+    const event = await this.eventRepository.findOne({
+      where: { key },
+      relations: { eventTheme: true },
+    });
+    if (!event) {
+      throw new NotFoundException(EXCEPTION_RESPONSE.EVENT_NOT_FOUND);
+    }
+    const booking = await this.findEventBooking(event.contractId);
+    return this.toEventV2ResponseDto(event, booking);
+  }
+
+  async listV2(): Promise<EventV2ResponseDto[]> {
+    const events = await this.eventRepository.find({
+      order: { createdAt: 'DESC' },
+      relations: { eventTheme: true },
+    });
+    const bookingsByContractId = await this.findEventBookingsForContracts(
+      events.map((event) => event.contractId),
+    );
+    return events.map((event) =>
+      this.toEventV2ResponseDto(event, bookingsByContractId.get(event.contractId) ?? null),
+    );
+  }
+
+  /** Batched lookup to avoid N+1 when resolving a list of events. */
+  private async findEventBookingsForContracts(
+    contractIds: number[],
+  ): Promise<Map<number, Booking>> {
+    const uniqueContractIds = [...new Set(contractIds)];
+    if (uniqueContractIds.length === 0) {
+      return new Map();
+    }
+    const bookings = await this.bookingRepository.find({
+      where: { contractId: In(uniqueContractIds), purpose: BOOKING_PURPOSE.EVENT },
+    });
+    return new Map(bookings.map((booking) => [booking.contractId as number, booking]));
+  }
+
+  private toEventV2ResponseDto(
+    event: Event,
+    booking: Booking | null,
+  ): EventV2ResponseDto {
+    return plainToInstance(
+      EventV2ResponseDto,
+      {
+        ...event,
+        serviceStartsAt: booking?.serviceStartsAt ?? null,
+        serviceEndsAt: booking?.serviceEndsAt ?? null,
+        venueName: booking?.venueName ?? null,
+        mapsUrl: booking?.mapsUrl ?? null,
+        bookingId: booking?.id ?? null,
+        status: this.getPublicEventStatus(booking),
+      },
+      { excludeExtraneousValues: true },
+    );
   }
 }

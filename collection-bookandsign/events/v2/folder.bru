@@ -1,0 +1,29 @@
+meta {
+  name: v2
+  seq: 12
+}
+
+auth {
+  mode: inherit
+}
+
+docs {
+  Schedule and location come ONLY from the contract's EVENT booking — there
+  is no fallback to the legacy `Event` columns. See
+  `odd/tasks/event-fields-deprecation.md`, "Phase 1b".
+
+  When the contract has no non-deleted EVENT booking:
+    - serviceStartsAt, serviceEndsAt, venueName, mapsUrl are all null
+    - bookingId is null
+    - status is "finished"
+
+  These deprecated v1 event fields are NOT returned by v2 and must not be
+  sent to any v2 request (v2 is read-only anyway):
+    serviceStartsAt, serviceEndsAt, venueName, serviceLocationUrl,
+    serviceTypeId, printTemplate, printTemplates, decorativeIcon
+
+  v2 also has no `scheduleSource` field (removed once the event fallback
+  was dropped — schedule is always sourced from the booking or absent).
+  Write endpoints (create/update event, and creating/updating the EVENT
+  booking) stay on v1 / the `bookings` collection.
+}

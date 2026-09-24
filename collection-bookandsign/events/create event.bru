@@ -19,38 +19,25 @@ body:json {
     "contractId": {{contract_id}},
     "key": "20",
     "eventTypeId": 1,
-    "serviceTypeId": 1,
     "honoreesNames": "Sinai y Eduardo",
     "albumPhrase": "Nuestro para siempre comienza hoy",
-    "venueName": "Salón ejemplo",
-    "serviceLocationUrl": "https://maps.app.goo.gl/example",
-    "serviceStartsAt": "2026-06-15T18:00:00.000Z",
-    "serviceEndsAt": "2026-06-16T02:00:00.000Z",
     "delegateName": "Contacto principal",
     "photoCount": 3,
-    "eventThemeId": 1,
-    "printTemplates": [
-      {
-        "icon": "rings",
-        "type": "polaroid",
-        "border": "led",
-        "template": "polaroid_rc_2"
-      },
-      {
-        "type": "keychain",
-        "template": "keychain_rc_2"
-      },
-      {
-        "icon": "rings",
-        "type": "polaroid",
-        "border": "led",
-        "template": "polaroid_rc_2"
-      }
-    ]
+    "eventThemeId": 1
   }
 }
 
 settings {
   encodeUrl: true
   timeout: 0
+}
+
+docs {
+  Deprecated fields removed from this example body:
+  serviceTypeId, venueName, serviceLocationUrl, serviceStartsAt,
+  serviceEndsAt, printTemplates (see the `events` folder docs). v1 still
+  accepts them — they are just no longer the source of truth for schedule/
+  status. The event's schedule/venue now come from creating a separate
+  EVENT booking for the same contract (`bookings` collection); create the
+  event first (as above), then the booking.
 }

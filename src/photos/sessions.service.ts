@@ -311,7 +311,10 @@ export class SessionsService {
     if (!session) {
       throw new NotFoundException(EXCEPTION_RESPONSE.SESSION_NOT_FOUND);
     }
-    const eventStatus = this.eventsService.getPublicEventStatus(session.event ?? {});
+    const eventBooking = session.event
+      ? await this.eventsService.findEventBooking(session.event.contractId)
+      : null;
+    const eventStatus = this.eventsService.getPublicEventStatus(eventBooking);
 
     const cached = this.cache.getSession(sessionToken);
     if (
@@ -346,8 +349,8 @@ export class SessionsService {
         eventToken: session.event?.token ?? '',
         honoreesNames: session.event?.honoreesNames ?? '',
         date:
-          session.event?.serviceStartsAt != null
-            ? formatDateTimeInTimeZone(session.event.serviceStartsAt, this.eventDisplayTimeZone())
+          eventBooking != null
+            ? formatDateTimeInTimeZone(eventBooking.serviceStartsAt, this.eventDisplayTimeZone())
             : '',
         albumPhase: session.event?.albumPhrase ?? '',
         status: eventStatus,
@@ -363,7 +366,8 @@ export class SessionsService {
 
   async getGallery(eventToken: string): Promise<GalleryResponseDto> {
     const event = await this.eventsService.getByToken(eventToken);
-    const eventStatus = this.eventsService.getPublicEventStatus(event);
+    const eventBooking = await this.eventsService.findEventBooking(event.contractId);
+    const eventStatus = this.eventsService.getPublicEventStatus(eventBooking);
 
     const cached = this.cache.getGallery(eventToken);
     if (
@@ -419,8 +423,8 @@ export class SessionsService {
         eventToken: event.token ?? '',
         honoreesNames: event.honoreesNames ?? '',
         date:
-          event.serviceStartsAt != null
-            ? formatDateTimeInTimeZone(event.serviceStartsAt, this.eventDisplayTimeZone())
+          eventBooking != null
+            ? formatDateTimeInTimeZone(eventBooking.serviceStartsAt, this.eventDisplayTimeZone())
             : '',
         albumPhase: event.albumPhrase ?? '',
         status: eventStatus,

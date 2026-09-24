@@ -14,6 +14,10 @@ export const BOOKING_SERVICE_RANGE_CHECK = 'service_ends_at > service_starts_at'
 @Entity('bookings')
 @Check('CHK_bookings_service_ends_after_starts', BOOKING_SERVICE_RANGE_CHECK)
 @Index(['serviceStartsAt', 'serviceEndsAt'])
+@Index('UQ_bookings_contract_event', ['contractId'], {
+  unique: true,
+  where: "purpose = 'event' AND deleted_at IS NULL",
+})
 export class Booking extends BaseTimeEntity {
   @Column('enum', { enum: BOOKING_STATUS, default: BOOKING_STATUS.CONFIRMED })
   status: BOOKING_STATUS = BOOKING_STATUS.CONFIRMED;

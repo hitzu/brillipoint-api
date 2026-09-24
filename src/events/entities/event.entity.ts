@@ -26,6 +26,7 @@ export class Event extends BaseTimeEntity {
   @Column('number', { name: 'event_type_id', nullable: true })
   eventTypeId!: number | null;
 
+  /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @Column('integer', { name: 'service_type_id', nullable: true })
   serviceTypeId!: number | null;
 
@@ -35,15 +36,19 @@ export class Event extends BaseTimeEntity {
   @Column('text', { name: 'album_phrase', nullable: true })
   albumPhrase!: string | null;
 
+  /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @Column('varchar', { name: 'venue_name', length: 255, nullable: true })
   venueName!: string | null;
 
+  /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @Column('text', { name: 'service_location_url', nullable: true })
   serviceLocationUrl!: string | null;
 
+  /** @deprecated Use the contract's EVENT booking (v2 events) instead. Removed in phase 2. */
   @Column('timestamptz', { name: 'service_starts_at', nullable: true })
   serviceStartsAt!: Date | null;
 
+  /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @Column('timestamptz', { name: 'service_ends_at', nullable: true })
   serviceEndsAt!: Date | null;
 
@@ -56,12 +61,15 @@ export class Event extends BaseTimeEntity {
   @Column('number', { name: 'event_theme_id', nullable: true })
   eventThemeId!: number | null;
 
+  /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @Column('varchar', { name: 'print_template', length: 50, default: 'polaroid_2' })
   printTemplate!: string;
 
+  /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @Column('varchar', { name: 'decorative_icon', length: 50, nullable: true })
   decorativeIcon!: string | null;
 
+  /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @Column('jsonb', { name: 'print_templates', nullable: true })
   printTemplates!: JsonValue;
 
@@ -69,6 +77,7 @@ export class Event extends BaseTimeEntity {
   @JoinColumn({ name: 'event_type_id' })
   eventType?: EventType | null;
 
+  /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @ManyToOne(() => ServiceType, (serviceType) => serviceType.events)
   @JoinColumn({ name: 'service_type_id' })
   serviceType?: ServiceType | null;

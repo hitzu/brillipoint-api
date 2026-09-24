@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Repository } from 'typeorm';
 
+import { formatDateTimeInTimeZone } from '../common/utils/format-datetime-in-time-zone';
 import { EventsService } from '../events/events.service';
 import { PhotoStatus } from './enums';
 import { Photo } from './entities/photo.entity';
@@ -37,6 +38,7 @@ describe('SessionsService', () => {
     findOneByToken: jest.Mock;
     getByToken: jest.Mock;
     getPublicEventStatus: jest.Mock;
+    findEventBooking: jest.Mock;
   };
   let configService: Pick<ConfigService, 'get'>;
   let cache: {
@@ -73,6 +75,7 @@ describe('SessionsService', () => {
       findOneByToken: jest.fn(),
       getByToken: jest.fn(),
       getPublicEventStatus: jest.fn(),
+      findEventBooking: jest.fn().mockResolvedValue(null),
     };
     configService = {
       get: jest.fn((key: string, defaultValue?: unknown) => {
@@ -399,6 +402,67 @@ describe('SessionsService', () => {
     const result = await service.getSession(session.sessionToken);
 
     expect(result.event.status).toBe('finished');
+  });
+
+  it('should report the session event as finished when the contract has no EVENT booking, even though the legacy event.serviceStartsAt is recent', async () => {
+    const session = {
+      id: 7,
+      sessionToken: '9abfe43e-30d9-4614-a0b2-c4ef6ed3a76f',
+      eventId: 12,
+      status: 'complete',
+      event: {
+        id: 12,
+        contractId: 99,
+        token: '6f01177a-d7ef-4342-a6e1-618da5230a06',
+        honoreesNames: 'Alex y Sam',
+        serviceStartsAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        albumPhrase: 'Nuestro album',
+        eventTheme: null,
+      },
+    } as Session;
+
+    sessionRepository.findOne.mockResolvedValue(session);
+    photoRepository.find.mockResolvedValue([]);
+    eventsService.findEventBooking.mockResolvedValue(null);
+    eventsService.getPublicEventStatus.mockImplementation((booking) =>
+      booking == null ? 'finished' : 'active',
+    );
+
+    const result = await service.getSession(session.sessionToken);
+
+    expect(eventsService.findEventBooking).toHaveBeenCalledWith(99);
+    expect(result.event.status).toBe('finished');
+    expect(result.event.date).toBe('');
+  });
+
+  it('should take the session event date from the EVENT booking, not the legacy event.serviceStartsAt', async () => {
+    const bookingStart = new Date('2026-07-01T15:00:00.000Z');
+    const session = {
+      id: 7,
+      sessionToken: '9abfe43e-30d9-4614-a0b2-c4ef6ed3a76f',
+      eventId: 12,
+      status: 'complete',
+      event: {
+        id: 12,
+        contractId: 99,
+        token: '6f01177a-d7ef-4342-a6e1-618da5230a06',
+        honoreesNames: 'Alex y Sam',
+        serviceStartsAt: new Date('2020-01-01T00:00:00.000Z'),
+        albumPhrase: 'Nuestro album',
+        eventTheme: null,
+      },
+    } as Session;
+
+    sessionRepository.findOne.mockResolvedValue(session);
+    photoRepository.find.mockResolvedValue([]);
+    eventsService.findEventBooking.mockResolvedValue({ serviceStartsAt: bookingStart });
+    eventsService.getPublicEventStatus.mockReturnValue('active');
+
+    const result = await service.getSession(session.sessionToken);
+
+    expect(result.event.date).toBe(
+      formatDateTimeInTimeZone(bookingStart, 'America/Mexico_City'),
+    );
   });
 
   it('should return the cached session when cache status matches the computed event status and no GIFs exist', async () => {
@@ -802,6 +866,71 @@ describe('SessionsService', () => {
     const result = await service.getGallery(event.token);
 
     expect(result.event.status).toBe('finished');
+  });
+
+  it('should report the gallery event as finished when the contract has no EVENT booking, even though the legacy event.serviceStartsAt is recent', async () => {
+    const event = {
+      id: 12,
+      contractId: 99,
+      token: '6f01177a-d7ef-4342-a6e1-618da5230a06',
+      serviceStartsAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      honoreesNames: 'Alex y Sam',
+      albumPhrase: 'Nuestro album',
+      eventTheme: null,
+    };
+    const queryBuilder = {
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([]),
+    };
+
+    eventsService.getByToken.mockResolvedValue(event);
+    eventsService.findEventBooking.mockResolvedValue(null);
+    eventsService.getPublicEventStatus.mockImplementation((booking) =>
+      booking == null ? 'finished' : 'active',
+    );
+    sessionRepository.find.mockResolvedValue([]);
+    photoRepository.createQueryBuilder.mockReturnValue(queryBuilder);
+
+    const result = await service.getGallery(event.token);
+
+    expect(eventsService.findEventBooking).toHaveBeenCalledWith(99);
+    expect(result.event.status).toBe('finished');
+    expect(result.event.date).toBe('');
+  });
+
+  it('should take the gallery event date from the EVENT booking, not the legacy event.serviceStartsAt', async () => {
+    const bookingStart = new Date('2026-07-01T15:00:00.000Z');
+    const event = {
+      id: 12,
+      contractId: 99,
+      token: '6f01177a-d7ef-4342-a6e1-618da5230a06',
+      serviceStartsAt: new Date('2020-01-01T00:00:00.000Z'),
+      honoreesNames: 'Alex y Sam',
+      albumPhrase: 'Nuestro album',
+      eventTheme: null,
+    };
+    const queryBuilder = {
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([]),
+    };
+
+    eventsService.getByToken.mockResolvedValue(event);
+    eventsService.findEventBooking.mockResolvedValue({ serviceStartsAt: bookingStart });
+    eventsService.getPublicEventStatus.mockReturnValue('active');
+    sessionRepository.find.mockResolvedValue([]);
+    photoRepository.createQueryBuilder.mockReturnValue(queryBuilder);
+
+    const result = await service.getGallery(event.token);
+
+    expect(result.event.date).toBe(
+      formatDateTimeInTimeZone(bookingStart, 'America/Mexico_City'),
+    );
   });
 
   it('should return an empty gallery cover photo when only GIF assets exist', async () => {
