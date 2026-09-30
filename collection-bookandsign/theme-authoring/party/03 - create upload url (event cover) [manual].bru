@@ -1,0 +1,54 @@
+meta {
+  name: 03 - create upload url (event cover) [manual]
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/theme-assets/upload-url
+  body: json
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{token}}
+}
+
+body:json {
+  {
+    "ownerType": "event",
+    "ownerId": {{event_id}},
+    "slot": "cover",
+    "fileName": "cover.jpg",
+    "mime": "image/jpeg"
+  }
+}
+
+script:post-response {
+  // Saves response values for step 04 (upload) and step 05 (patch event).
+  bru.setVar('cover_path', res.body.path);
+  bru.setVar('cover_public_url', res.body.publicUrl);
+  bru.setVar('cover_signed_url', res.body.signedUrl);
+  bru.setVar('cover_mime', 'image/jpeg');
+}
+
+docs {
+  Manual-only, excluded from any automated run: this returns a real
+  Supabase signed upload URL for the `themes/events/{{event_id}}/cover/...`
+  path. Runnable on its own against a configured Supabase bucket, but not
+  safe to run unattended in CI (same reasoning as
+  `contracts-v4 (bookings)/prep-profile` 05-06).
+
+  Inputs: `event_id` (folder var — must reference an existing, non-deleted
+  event or this returns 404 `EVENT_NOT_FOUND`).
+
+  Sets: `cover_path`, `cover_public_url`, `cover_signed_url`, `cover_mime`
+  for step 04 (upload) and step 05 (patch event with the stored slot).
+
+  Response fields that matter: `{ bucket, path, signedUrl, token,
+  publicUrl }` — `path`/`publicUrl` are what gets stored in
+  `themeOverrides.images.cover`; `signedUrl` is the one-time PUT target.
+
+  Note: `cover` is validated as 4:5 by the FRONTEND only — this endpoint
+  does not check the uploaded file's aspect ratio.
+}

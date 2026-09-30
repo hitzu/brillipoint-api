@@ -16,13 +16,32 @@ import { EventAnalyticsController } from './analytics/event-analytics.controller
 import { EventAnalyticsService } from './analytics/event-analytics.service';
 import { EventsV2Controller } from './v2/events-v2.controller';
 import { Booking } from '../bookings/entities/booking.entity';
+import { BrandKitsModule } from '../brand-kits/brand-kits.module';
+import { Contract } from '../contracts/entities/contract.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Event, EventType, ServiceType, EventPhrase, EventTheme, EventAnalytic, Booking]),
+    TypeOrmModule.forFeature([
+      Event,
+      EventType,
+      ServiceType,
+      EventPhrase,
+      EventTheme,
+      EventAnalytic,
+      Booking,
+      Contract,
+    ]),
+    BrandKitsModule,
   ],
   controllers: [EventsController, EventsV2Controller, EventAnalyticsController],
-  providers: [EventsService, EventTypeService, ServiceTypeService, EventPhrasesService, EventThemeService, EventAnalyticsService],
+  providers: [
+    EventsService,
+    EventTypeService,
+    ServiceTypeService,
+    EventPhrasesService,
+    EventThemeService,
+    EventAnalyticsService,
+  ],
   exports: [EventsService, EventAnalyticsService],
 })
 export class EventsModule {}

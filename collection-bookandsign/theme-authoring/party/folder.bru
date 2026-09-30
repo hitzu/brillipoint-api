@@ -1,0 +1,35 @@
+meta {
+  name: party
+  seq: 1
+}
+
+auth {
+  mode: inherit
+}
+
+vars:pre-request {
+  event_id: 15
+  event_token: fdbf1b03-1706-4ff8-8c3b-dbfa52a56e78
+}
+
+docs {
+  Party flow: pick a preset, preview it with per-event overrides, upload a
+  cover image, save the overrides on an existing event, then verify the
+  public theme.
+
+  `event_id` / `event_token` above default to a real event seeded in the
+  `local` environment (found via `GET /events`, staff). Override them with
+  the id/token of an event you own — `events/get event by id.bru` /
+  `events/get event by token.bru` in the `events` collection.
+
+  Steps:
+    01 - get themes (pick preset)              sets preset_id
+    02 - preview party theme                    dry run, no persistence
+    03 - create upload url (event cover) [manual]   real Supabase target
+    04 - put cover file (signed url) [manual]       needs Bruno Developer Mode
+    05 - patch event (theme overrides)          persists cover + confetti
+    06 - get public event theme (verify)        public, 5 min cache
+
+  03-04 are manual-only (real Supabase upload + local file), same as
+  `contracts-v4 (bookings)/prep-profile` 05-06 — not safe to run unattended.
+}

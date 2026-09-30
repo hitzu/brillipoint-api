@@ -1,10 +1,19 @@
-import { Column, Entity, Index, JoinColumn, ManyToOne, OneToOne } from 'typeorm';
+import {
+  Column,
+  Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
+  OneToOne,
+} from 'typeorm';
 
 import { BaseTimeEntity } from '../../common/entities/base-time.entity';
 import { UseDto } from '../../common/dto/use-dto.decorator';
+import { BrandKit } from '../../brand-kits/entities/brand-kit.entity';
 import { Contract } from '../../contracts/entities/contract.entity';
 import { EventResponseDto } from '../dto/event-response.dto';
 import type { JsonValue } from '../dto/json-value';
+import type { ThemeOverrides } from '../theme/theme.types';
 import { EventTheme } from './event-themes.entity';
 import { EventType } from './event-type.entity';
 import { ServiceType } from './service-type.entity';
@@ -62,20 +71,36 @@ export class Event extends BaseTimeEntity {
   eventThemeId!: number | null;
 
   /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
-  @Column('varchar', { name: 'print_template', length: 50, default: 'polaroid_2' })
+  @Column('varchar', {
+    name: 'print_template',
+    length: 50,
+    default: 'polaroid_2',
+  })
   printTemplate!: string;
-
-  /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
-  @Column('varchar', { name: 'decorative_icon', length: 50, nullable: true })
-  decorativeIcon!: string | null;
 
   /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @Column('jsonb', { name: 'print_templates', nullable: true })
   printTemplates!: JsonValue;
 
+  @Column('integer', { name: 'brand_kit_id', nullable: true })
+  brandKitId!: number | null;
+
+  /**
+   * Per-event theme tweaks (see `ThemeOverrides` /
+   * odd/tasks/theme-brand-kits.md). Merged last in the layered theme
+   * resolution chain.
+   */
+  @Column('jsonb', { name: 'theme_overrides', nullable: true })
+  themeOverrides!: ThemeOverrides | null;
+
   @ManyToOne(() => EventType, (eventType) => eventType.events)
   @JoinColumn({ name: 'event_type_id' })
   eventType?: EventType | null;
+
+  /** Client theme kit (nullable: losing it falls back to the preset/default). */
+  @ManyToOne(() => BrandKit, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'brand_kit_id' })
+  brandKit?: BrandKit | null;
 
   /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @ManyToOne(() => ServiceType, (serviceType) => serviceType.events)

@@ -2,33 +2,45 @@ import {
   BadRequestException,
   ConflictException,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { EventTheme } from './entities/event-themes.entity';
+import { Contract } from '../contracts/entities/contract.entity';
 import { AppDataSource as TestDataSource } from '../config/database/data-source';
 import { EXCEPTION_RESPONSE } from '../config/errors/exception-response.config';
 import { ContractFactory } from '../../test/factories/contracts/contract.factory';
 import { EventFactory } from '../../test/factories/events/event.factory';
 import { BookingFactory } from '../../test/factories/bookings/booking.factory';
+import { BrandKitFactory } from '../../test/factories/brand-kits/brand-kit.factory';
+import { BrandFactory } from '../../test/factories/brands/brands.factories';
+import { EventThemeFactory } from '../../test/factories/events/event-theme.factory';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { Event } from './entities/event.entity';
 import { EventsService } from './events.service';
-import { EventTypeFactory } from '../../test/factories/events/event-type.factory'
+import { EventThemeService } from './event-theme.service';
+import { THEME_WRITE_LOCK_KEY } from './theme/theme-write-lock';
+import { EventTypeFactory } from '../../test/factories/events/event-type.factory';
 import { ServiceTypeFactory } from '../../test/factories/events/service-type.factory';
 import { PinoLogger } from 'nestjs-pino';
 import { Booking } from '../bookings/entities/booking.entity';
 import { BOOKING_PURPOSE } from '../bookings/constants/booking_purpose.enum';
+import { BrandKitsService } from '../brand-kits/brand-kits.service';
+import { BrandKit } from '../brand-kits/entities/brand-kit.entity';
 
 describe('EventsService', () => {
   let service: EventsService;
+  let eventThemeService: EventThemeService;
   let eventFactory: EventFactory;
   let bookingFactory: BookingFactory;
+  let brandKitFactory: BrandKitFactory;
+  let eventThemeFactory: EventThemeFactory;
 
   beforeEach(async () => {
-
     const loggerMock = {
       setContext: jest.fn(),
       error: jest.fn(),
@@ -40,6 +52,8 @@ describe('EventsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         EventsService,
+        EventThemeService,
+        BrandKitsService,
         {
           provide: getRepositoryToken(Event),
           useValue: TestDataSource.getRepository(Event),
@@ -49,6 +63,18 @@ describe('EventsService', () => {
           useValue: TestDataSource.getRepository(Booking),
         },
         {
+          provide: getRepositoryToken(BrandKit),
+          useValue: TestDataSource.getRepository(BrandKit),
+        },
+        {
+          provide: getRepositoryToken(EventTheme),
+          useValue: TestDataSource.getRepository(EventTheme),
+        },
+        {
+          provide: getRepositoryToken(Contract),
+          useValue: TestDataSource.getRepository(Contract),
+        },
+        {
           provide: PinoLogger,
           useValue: loggerMock,
         },
@@ -56,8 +82,11 @@ describe('EventsService', () => {
     }).compile();
 
     service = module.get<EventsService>(EventsService);
+    eventThemeService = module.get<EventThemeService>(EventThemeService);
     eventFactory = new EventFactory(TestDataSource);
     bookingFactory = new BookingFactory(TestDataSource);
+    brandKitFactory = new BrandKitFactory(TestDataSource);
+    eventThemeFactory = new EventThemeFactory(TestDataSource);
   });
 
   describe('printTemplates DTO validation', () => {
@@ -80,12 +109,82 @@ describe('EventsService', () => {
     });
   });
 
+  describe('decorativeIcon removal (v1 whitelist behavior)', () => {
+    it('should accept an update payload with decorativeIcon and silently ignore it, matching ValidationPipe(whitelist: true, forbidNonWhitelisted: false)', async () => {
+      // Arrange
+      const payload = { venueName: 'Salón Real', decorativeIcon: 'rings' };
+      const updateDto = plainToInstance(UpdateEventDto, payload);
+
+      // Act
+      const errors = await validate(updateDto, {
+        whitelist: true,
+        forbidNonWhitelisted: false,
+      });
+
+      // Assert: no validation errors (not rejected), and the unknown
+      // property is stripped by `whitelist: true` as a side effect.
+      expect(errors).toEqual([]);
+      expect(updateDto).not.toHaveProperty('decorativeIcon');
+      expect(updateDto.venueName).toBe('Salón Real');
+    });
+  });
+
   describe('create', () => {
+    it('should reject an invalid preset and leave no event row persisted', async () => {
+      // Arrange
+      const contract = await new ContractFactory(TestDataSource).create();
+      const eventType = await new EventTypeFactory(TestDataSource).create();
+      const preset = await eventThemeFactory.create({
+        tokens: { primary: '#ffffff' },
+      });
+      const key = 'create-invalid-theme-preset';
+
+      // Act
+      const create = service.create({
+        contractId: contract.id,
+        eventTypeId: eventType.id,
+        eventThemeId: preset.id,
+        key,
+      });
+
+      // Assert
+      await expect(create).rejects.toBeInstanceOf(UnprocessableEntityException);
+      const persistedCount = await TestDataSource.getRepository(Event).countBy({ key });
+      expect(persistedCount).toBe(0);
+    });
+
+    it('should reject an invalid contract brand kit fallback and leave no event row persisted', async () => {
+      // Arrange
+      const brandKit = await brandKitFactory.create({
+        overrides: { tokens: { primary: '#ffffff' } },
+      });
+      const brand = await new BrandFactory(TestDataSource).create({
+        brandKitId: brandKit.id,
+      });
+      const contract = await new ContractFactory(TestDataSource).create({
+        brandId: brand.id,
+      });
+      const eventType = await new EventTypeFactory(TestDataSource).create();
+      const key = 'create-invalid-contract-theme';
+
+      // Act
+      const create = service.create({
+        contractId: contract.id,
+        eventTypeId: eventType.id,
+        key,
+      });
+
+      // Assert
+      await expect(create).rejects.toBeInstanceOf(UnprocessableEntityException);
+      const persistedCount = await TestDataSource.getRepository(Event).countBy({ key });
+      expect(persistedCount).toBe(0);
+    });
+
     it('should create event with generated UUID token', async () => {
       const contractFactory = new ContractFactory(TestDataSource);
       const contract = await contractFactory.create();
-      const eventTypeFactory = new EventTypeFactory(TestDataSource)
-      const eventType = await eventTypeFactory.create()
+      const eventTypeFactory = new EventTypeFactory(TestDataSource);
+      const eventType = await eventTypeFactory.create();
 
       const result = await service.create({
         eventTypeId: eventType.id,
@@ -104,8 +203,8 @@ describe('EventsService', () => {
 
     it('should throw ConflictException when key already exists', async () => {
       const event = await eventFactory.create({ key: 'duplicate-key' });
-      const eventTypeFactory = new EventTypeFactory(TestDataSource)
-      const eventType = await eventTypeFactory.create()
+      const eventTypeFactory = new EventTypeFactory(TestDataSource);
+      const eventType = await eventTypeFactory.create();
 
       await expect(
         service.create({
@@ -119,9 +218,11 @@ describe('EventsService', () => {
     });
 
     it('should throw ConflictException when contract already has an event', async () => {
-      const existing = await eventFactory.create({ key: 'existing-for-contract' });
-      const eventTypeFactory = new EventTypeFactory(TestDataSource)
-      const eventType = await eventTypeFactory.create()
+      const existing = await eventFactory.create({
+        key: 'existing-for-contract',
+      });
+      const eventTypeFactory = new EventTypeFactory(TestDataSource);
+      const eventType = await eventTypeFactory.create();
 
       await expect(
         service.create({
@@ -141,8 +242,8 @@ describe('EventsService', () => {
       const contract = await contractFactory.create();
       const serviceStartsAt = new Date('2026-06-01T18:00:00.000Z');
       const serviceEndsAt = new Date('2026-06-01T23:00:00.000Z');
-      const eventTypeFactory = new EventTypeFactory(TestDataSource)
-      const eventType = await eventTypeFactory.create()
+      const eventTypeFactory = new EventTypeFactory(TestDataSource);
+      const eventType = await eventTypeFactory.create();
       const serviceTypeFactory = new ServiceTypeFactory(TestDataSource);
       const serviceType = await serviceTypeFactory.create();
 
@@ -165,7 +266,9 @@ describe('EventsService', () => {
       expect(result.honoreesNames).toBe('Ana y Luis');
       expect(result.albumPhrase).toBe('Para siempre');
       expect(result.venueName).toBe('Salón Jardín');
-      expect(result.serviceLocationUrl).toBe('https://maps.example.com/place/abc');
+      expect(result.serviceLocationUrl).toBe(
+        'https://maps.example.com/place/abc',
+      );
       expect(result.delegateName).toBe('María Pérez');
       expect(result.serviceStartsAt?.getTime()).toBe(serviceStartsAt.getTime());
       expect(result.serviceEndsAt?.getTime()).toBe(serviceEndsAt.getTime());
@@ -198,8 +301,8 @@ describe('EventsService', () => {
     it('should throw BadRequestException when serviceEndsAt is not after serviceStartsAt', async () => {
       const contractFactory = new ContractFactory(TestDataSource);
       const contract = await contractFactory.create();
-      const eventTypeFactory = new EventTypeFactory(TestDataSource)
-      const eventType = await eventTypeFactory.create()
+      const eventTypeFactory = new EventTypeFactory(TestDataSource);
+      const eventType = await eventTypeFactory.create();
 
       await expect(
         service.create({
@@ -264,10 +367,132 @@ describe('EventsService', () => {
   });
 
   describe('update', () => {
+    it('locks theme updates and creation without blocking ordinary event patches', async () => {
+      // Arrange
+      const event = await eventFactory.create();
+      const contract = await new ContractFactory(TestDataSource).create();
+      const eventType = await new EventTypeFactory(TestDataSource).create();
+      let releaseLock!: () => void;
+      let signalLockHeld!: () => void;
+      const lockHeld = new Promise<void>((resolve) => {
+        signalLockHeld = resolve;
+      });
+      const lockReleased = new Promise<void>((resolve) => {
+        releaseLock = resolve;
+      });
+      const lockHolder = TestDataSource.transaction(async (manager) => {
+        await manager.query('SELECT pg_advisory_xact_lock($1)', [
+          THEME_WRITE_LOCK_KEY,
+        ]);
+        signalLockHeld();
+        await lockReleased;
+      });
+      await lockHeld;
+
+      let ordinaryUpdateSettled = false;
+      let themeUpdateSettled = false;
+      let createSettled = false;
+      const ordinaryUpdate = service
+        .update(event.id, { venueName: 'Updated venue' })
+        .finally(() => {
+          ordinaryUpdateSettled = true;
+        });
+      const themeUpdate = service
+        .update(event.id, { themeOverrides: { tokens: { primary: '#9d174d' } } })
+        .finally(() => {
+          themeUpdateSettled = true;
+        });
+      const create = service
+        .create({
+          contractId: contract.id,
+          eventTypeId: eventType.id,
+          key: `locked-${Date.now()}`,
+        })
+        .finally(() => {
+          createSettled = true;
+        });
+
+      // Act
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      // Assert
+      try {
+        expect([ordinaryUpdateSettled, themeUpdateSettled, createSettled]).toEqual([
+          true,
+          false,
+          false,
+        ]);
+      } finally {
+        releaseLock();
+      }
+      await lockHolder;
+      await expect(
+        Promise.all([ordinaryUpdate, themeUpdate, create]),
+      ).resolves.toHaveLength(3);
+    });
+
+    it('should reject an invalid theme override without changing the event or public theme', async () => {
+      // Arrange
+      const event = await eventFactory.create({ key: 'update-invalid-theme-override' });
+      const before = await eventThemeService.getPublicThemeByEventToken(event.token);
+
+      // Act
+      const update = service.update(event.id, {
+        themeOverrides: { tokens: { primary: '#ffffff' } },
+      });
+
+      // Assert
+      await expect(update).rejects.toBeInstanceOf(UnprocessableEntityException);
+      const persisted = await TestDataSource.getRepository(Event).findOneByOrFail({ id: event.id });
+      const after = await eventThemeService.getPublicThemeByEventToken(event.token);
+      expect(persisted.themeOverrides).toBeNull();
+      expect(after.body.eventTheme.tokens).toEqual(before.body.eventTheme.tokens);
+    });
+
+    it('should reject an invalid preset assignment without changing the event or public theme', async () => {
+      // Arrange
+      const event = await eventFactory.create({ key: 'update-invalid-theme-preset' });
+      const preset = await eventThemeFactory.create({
+        tokens: { primary: '#ffffff' },
+      });
+      const before = await eventThemeService.getPublicThemeByEventToken(event.token);
+
+      // Act
+      const update = service.update(event.id, { eventThemeId: preset.id });
+
+      // Assert
+      await expect(update).rejects.toBeInstanceOf(UnprocessableEntityException);
+      const persisted = await TestDataSource.getRepository(Event).findOneByOrFail({ id: event.id });
+      const after = await eventThemeService.getPublicThemeByEventToken(event.token);
+      expect(persisted.eventThemeId).toBeNull();
+      expect(after.body.eventTheme.tokens).toEqual(before.body.eventTheme.tokens);
+    });
+
+    it('should reject an invalid client kit assignment without changing the event or public theme', async () => {
+      // Arrange
+      const event = await eventFactory.create({ key: 'update-invalid-theme-kit' });
+      const brandKit = await brandKitFactory.create({
+        overrides: { tokens: { primary: '#ffffff' } },
+      });
+      const before = await eventThemeService.getPublicThemeByEventToken(event.token);
+
+      // Act
+      const update = service.update(event.id, { brandKitId: brandKit.id });
+
+      // Assert
+      await expect(update).rejects.toBeInstanceOf(UnprocessableEntityException);
+      const persisted = await TestDataSource.getRepository(Event).findOneByOrFail({ id: event.id });
+      const after = await eventThemeService.getPublicThemeByEventToken(event.token);
+      expect(persisted.brandKitId).toBeNull();
+      expect(after.body.eventTheme.tokens).toEqual(before.body.eventTheme.tokens);
+    });
+
     it('should update venue and return updated response', async () => {
       const event = await eventFactory.create({ key: 'update-name-001' });
 
-      const result = await service.update(event.id, { venueName: 'Updated Venue' });
+      const result = await service.update(event.id, {
+        venueName: 'Updated Venue',
+      });
 
       expect(result.id).toBe(event.id);
       expect(result.venueName).toBe('Updated Venue');
@@ -275,8 +500,8 @@ describe('EventsService', () => {
 
     it('should update multiple optional fields', async () => {
       const event = await eventFactory.create({ key: 'update-multi-001' });
-      const eventTypeFactory = new EventTypeFactory(TestDataSource)
-      const eventType = await eventTypeFactory.create()
+      const eventTypeFactory = new EventTypeFactory(TestDataSource);
+      const eventType = await eventTypeFactory.create();
       const serviceTypeFactory = new ServiceTypeFactory(TestDataSource);
       const serviceType = await serviceTypeFactory.create();
 
@@ -317,6 +542,100 @@ describe('EventsService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
+    it('should update brandKitId when it references an existing brand kit', async () => {
+      // Arrange
+      const event = await eventFactory.create({ key: 'update-brand-kit-001' });
+      const brandKit = await brandKitFactory.create();
+
+      // Act
+      const result = await service.update(event.id, {
+        brandKitId: brandKit.id,
+      });
+
+      // Assert
+      expect(result.brandKitId).toBe(brandKit.id);
+    });
+
+    it('should update eventThemeId when it references an existing preset', async () => {
+      // Arrange
+      const event = await eventFactory.create({ key: 'update-theme-001' });
+      const preset = await eventThemeFactory.create();
+
+      // Act
+      const result = await service.update(event.id, {
+        eventThemeId: preset.id,
+      });
+
+      // Assert
+      expect(result.eventThemeId).toBe(preset.id);
+    });
+
+    it('should clear eventThemeId with null so the event falls back to the system default', async () => {
+      // Arrange
+      const preset = await eventThemeFactory.create();
+      const event = await eventFactory.create({
+        key: 'update-theme-002',
+        eventThemeId: preset.id,
+      });
+
+      // Act
+      const result = await service.update(event.id, { eventThemeId: null });
+
+      // Assert
+      expect(result.eventThemeId).toBeNull();
+    });
+
+    it('should throw NotFoundException when eventThemeId does not reference an existing preset', async () => {
+      // Arrange
+      const event = await eventFactory.create({ key: 'update-theme-003' });
+
+      // Act & Assert
+      await expect(
+        service.update(event.id, { eventThemeId: 999999 }),
+      ).rejects.toEqual(
+        new NotFoundException(EXCEPTION_RESPONSE.EVENT_THEME_NOT_FOUND),
+      );
+    });
+
+    it('should throw NotFoundException when brandKitId does not reference an existing brand kit', async () => {
+      // Arrange
+      const event = await eventFactory.create({ key: 'update-brand-kit-002' });
+
+      // Act & Assert
+      await expect(
+        service.update(event.id, { brandKitId: 999999 }),
+      ).rejects.toEqual(
+        new NotFoundException(EXCEPTION_RESPONSE.BRAND_KIT_NOT_FOUND),
+      );
+    });
+
+    it('should persist themeOverrides on the event', async () => {
+      // Arrange
+      const event = await eventFactory.create({
+        key: 'update-theme-overrides-001',
+      });
+      const themeOverrides = { tokens: { primary: '#123456' } };
+
+      // Act
+      const result = await service.update(event.id, { themeOverrides });
+
+      // Assert
+      expect(result.themeOverrides).toEqual(themeOverrides);
+    });
+
+    it('should no longer expose decorativeIcon in the update response', async () => {
+      // Arrange
+      const event = await eventFactory.create({
+        key: 'update-no-decorative-icon-001',
+      });
+
+      // Act
+      const result = await service.update(event.id, { venueName: 'Salón X' });
+
+      // Assert
+      expect(result).not.toHaveProperty('decorativeIcon');
+    });
+
     it('should throw BadRequestException when serviceEndsAt is before serviceStartsAt', async () => {
       const event = await eventFactory.create({ key: 'update-bad-window-001' });
 
@@ -343,7 +662,9 @@ describe('EventsService', () => {
     });
 
     it('should update serviceTypeId and printTemplates', async () => {
-      const event = await eventFactory.create({ key: 'update-multi-product-001' });
+      const event = await eventFactory.create({
+        key: 'update-multi-product-001',
+      });
       const serviceTypeFactory = new ServiceTypeFactory(TestDataSource);
       const serviceType = await serviceTypeFactory.create();
       const printTemplates = [
@@ -360,7 +681,9 @@ describe('EventsService', () => {
     });
 
     it('should allow setting printTemplates to null', async () => {
-      const event = await eventFactory.create({ key: 'update-null-templates-001' });
+      const event = await eventFactory.create({
+        key: 'update-null-templates-001',
+      });
 
       const result = await service.update(event.id, { printTemplates: null });
 
@@ -373,7 +696,9 @@ describe('EventsService', () => {
         venueName: 'Original Venue',
       });
 
-      const result = await service.update(event.id, { honoreesNames: 'New Honoree' });
+      const result = await service.update(event.id, {
+        honoreesNames: 'New Honoree',
+      });
 
       expect(result.honoreesNames).toBe('New Honoree');
       expect(result.venueName).toBe('Original Venue');
@@ -393,9 +718,7 @@ describe('EventsService', () => {
     });
 
     it('should throw NotFoundException when key does not exist', async () => {
-      await expect(
-        service.getByKey('non-existent-key'),
-      ).rejects.toEqual(
+      await expect(service.getByKey('non-existent-key')).rejects.toEqual(
         new NotFoundException(EXCEPTION_RESPONSE.EVENT_NOT_FOUND),
       );
     });
@@ -556,7 +879,9 @@ describe('EventsService', () => {
     it('should throw NotFoundException when token does not exist', async () => {
       await expect(
         service.getByTokenV2('11111111-1111-1111-1111-111111111111'),
-      ).rejects.toEqual(new NotFoundException(EXCEPTION_RESPONSE.EVENT_NOT_FOUND));
+      ).rejects.toEqual(
+        new NotFoundException(EXCEPTION_RESPONSE.EVENT_NOT_FOUND),
+      );
     });
   });
 
@@ -619,8 +944,12 @@ describe('EventsService', () => {
       const result = await service.listV2();
 
       // Assert
-      const resolvedWithBooking = result.find((e) => e.id === eventWithBooking.id);
-      const resolvedWithoutBooking = result.find((e) => e.id === eventWithoutBooking.id);
+      const resolvedWithBooking = result.find(
+        (e) => e.id === eventWithBooking.id,
+      );
+      const resolvedWithoutBooking = result.find(
+        (e) => e.id === eventWithoutBooking.id,
+      );
       expect(resolvedWithBooking).toMatchObject({
         bookingId: booking.id,
       });

@@ -1,18 +1,49 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Expose, plainToInstance } from 'class-transformer';
+import { Expose, Type, plainToInstance } from 'class-transformer';
 import {
   IsNotEmpty,
   IsOptional,
   IsString,
   Validate,
+  ValidateNested,
   ValidatorConstraint,
   ValidatorConstraintInterface,
   validateSync,
 } from 'class-validator';
 
-export class ThemeImageAssetDto {
+import type {
+  ThemeCoverImageSlot,
+  ThemeImageOverrides,
+  ThemeImageSlot,
+} from '../../theme/theme.types';
+
+/** Typed image slot keys accepted on a preset (mirrors `ThemeImageOverrides`). */
+const THEME_IMAGE_SLOT_KEYS = [
+  'logo',
+  'splashIcon',
+  'hero',
+  'watermark',
+  'background',
+  'cover',
+] as const;
+
+export class ThemeLocalizedTextDto {
   @Expose()
-  @ApiProperty({ example: 'themes/amor-eterno/splash.png' })
+  @ApiPropertyOptional({ example: 'Amor Eterno' })
+  @IsOptional()
+  @IsString()
+  es?: string;
+
+  @Expose()
+  @ApiPropertyOptional({ example: 'Eternal Love' })
+  @IsOptional()
+  @IsString()
+  en?: string;
+}
+
+export class ThemeImageAssetDto implements ThemeImageSlot {
+  @Expose()
+  @ApiProperty({ example: 'themes/amor-eterno/logo.png' })
   @IsString()
   @IsNotEmpty()
   path!: string;
@@ -20,32 +51,37 @@ export class ThemeImageAssetDto {
   @Expose()
   @ApiProperty({
     example:
-      'https://<project>.supabase.co/storage/v1/object/public/public/themes/amor-eterno/splash.png',
+      'https://<project>.supabase.co/storage/v1/object/public/public/themes/amor-eterno/logo.png',
   })
   @IsString()
   @IsNotEmpty()
   url!: string;
 
   @Expose()
-  @ApiPropertyOptional({ example: 'Amor Eterno' })
+  @ApiPropertyOptional({ type: ThemeLocalizedTextDto })
   @IsOptional()
-  @IsString()
-  alt?: string;
-
-  @Expose()
-  @ApiPropertyOptional({ example: 'image/png' })
-  @IsOptional()
-  @IsString()
-  mime?: string;
+  @ValidateNested()
+  @Type(() => ThemeLocalizedTextDto)
+  alt?: ThemeLocalizedTextDto;
 }
 
-export type ThemeImageMap = Record<string, ThemeImageAssetDto>;
+/** The `cover` slot additionally carries a link (fixed 4:5 aspect ratio, T6/T7). */
+export class ThemeCoverImageAssetDto
+  extends ThemeImageAssetDto
+  implements ThemeCoverImageSlot
+{
+  @Expose()
+  @ApiPropertyOptional({ example: 'https://brillipoint.com' })
+  @IsOptional()
+  @IsString()
+  link?: string;
+}
+
+export type ThemeImageMap = ThemeImageOverrides;
 
 @ValidatorConstraint({ name: 'isThemeImageMap', async: false })
-export class IsThemeImageMapConstraint
-  implements ValidatorConstraintInterface
-{
-  private lastError = 'images must be a map of theme image entries';
+export class IsThemeImageMapConstraint implements ValidatorConstraintInterface {
+  private lastError = 'images must be a map of typed theme image slots';
 
   validate(value: unknown): boolean {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -56,7 +92,19 @@ export class IsThemeImageMapConstraint
     for (const [key, entry] of Object.entries(
       value as Record<string, unknown>,
     )) {
-      const instance = plainToInstance(ThemeImageAssetDto, entry);
+      if (!(THEME_IMAGE_SLOT_KEYS as readonly string[]).includes(key)) {
+        this.lastError = `${key} is not a known theme image slot (expected one of: ${THEME_IMAGE_SLOT_KEYS.join(', ')})`;
+        return false;
+      }
+
+      // Slots may be explicitly removed with null (matches ThemeImageOverrides).
+      if (entry === null) {
+        continue;
+      }
+
+      const dtoClass =
+        key === 'cover' ? ThemeCoverImageAssetDto : ThemeImageAssetDto;
+      const instance = plainToInstance(dtoClass, entry);
       const errors = validateSync(instance, {
         whitelist: true,
         forbidNonWhitelisted: true,

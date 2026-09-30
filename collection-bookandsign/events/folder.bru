@@ -14,11 +14,16 @@ docs {
   moves to the bookings domain — see `odd/tasks/event-fields-deprecation.md`:
 
     serviceStartsAt, serviceEndsAt, venueName, serviceLocationUrl,
-    serviceTypeId, printTemplate, printTemplates, decorativeIcon
+    serviceTypeId, printTemplate, printTemplates
 
   New integrations should read the `v2` subfolder instead, whose responses
   resolve schedule/location only from the contract's EVENT booking (see its
   own docs). v1 create/update still accept the deprecated fields above (do
   not remove them from existing client code yet), they are just no longer
   the source of truth for status or for v2/session/gallery display.
+
+  `decorativeIcon` was removed entirely (not just deprecated) in
+  `odd/tasks/theme-brand-kits.md` T4 — the column is dropped. Requests that
+  still send it are silently ignored (`forbidNonWhitelisted: false`). Use
+  `brandKitId` / `themeOverrides` instead (see `update event.bru`).
 }

@@ -11,6 +11,7 @@ import { PrepProfileUploadsService } from './prep-profile-uploads.service';
 import { assertPrepProfileQuestionId } from './prep-profile.validation';
 import { EXCEPTION_RESPONSE } from '../../config/errors/exception-response.config';
 import { Contract } from '../entities/contract.entity';
+import { StorageService } from '../../common/storage/storage.service';
 
 jest.mock('crypto', () => ({
   randomUUID: jest.fn(() => 'uuid-123'),
@@ -75,14 +76,20 @@ describe('PrepProfileUploadsService', () => {
       findOne: jest.fn(),
     };
 
-    service = new PrepProfileUploadsService(
-      configService as ConfigService,
-      contractsRepository as Repository<Contract>,
-    );
-
+    // Storage boundary was extracted to StorageService (T4/theme-authoring
+    // refactor): PrepProfileUploadsService now delegates to a real
+    // StorageService instance instead of owning the Supabase client itself,
+    // so it's constructed here and its private `client` getter is spied on
+    // exactly like PrepProfileUploadsService's own getter used to be.
+    const storageService = new StorageService(configService as ConfigService);
     jest
-      .spyOn(service as unknown as { client: unknown }, 'client', 'get')
+      .spyOn(storageService as unknown as { client: unknown }, 'client', 'get')
       .mockReturnValue(supabaseClient);
+
+    service = new PrepProfileUploadsService(
+      contractsRepository as Repository<Contract>,
+      storageService,
+    );
   });
 
   afterEach(() => {
@@ -109,7 +116,9 @@ describe('PrepProfileUploadsService', () => {
       });
 
       expect(() => service.getPublicUrl('some/path.png')).toThrow(
-        new InternalServerErrorException(EXCEPTION_RESPONSE.SUPABASE_STORAGE_NOT_CONFIGURED),
+        new InternalServerErrorException(
+          EXCEPTION_RESPONSE.SUPABASE_STORAGE_NOT_CONFIGURED,
+        ),
       );
     });
   });
@@ -174,7 +183,10 @@ describe('PrepProfileUploadsService', () => {
     const questionId = 'face_photos';
 
     function mockQuestion(
-      question: { id: string; type: string } = { id: questionId, type: 'asset' },
+      question: { id: string; type: string } = {
+        id: questionId,
+        type: 'asset',
+      },
     ) {
       (assertPrepProfileQuestionId as unknown as jest.Mock).mockReturnValue(
         question,
@@ -378,4 +390,3 @@ describe('PrepProfileUploadsService', () => {
     });
   });
 });
-

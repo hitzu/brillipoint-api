@@ -17,11 +17,13 @@ import { PrepProfileUploadsService } from './preparation-profile/prep-profile-up
 import { Event } from '../events/entities/event.entity';
 import { PromotionsModule } from '../promotions/promotions.module';
 import { Booking } from '../bookings/entities/booking.entity';
+import { StorageModule } from '../common/storage/storage.module';
 
 @Module({
   imports: [
     PaymentsModule,
     PromotionsModule,
+    StorageModule,
     TypeOrmModule.forFeature([
       Contract,
       ContractExtra,

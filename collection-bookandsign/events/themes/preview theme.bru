@@ -1,0 +1,45 @@
+meta {
+  name: preview theme
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{base_url}}/events/themes/preview
+  body: json
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{token}}
+}
+
+body:json {
+  {
+    "eventThemeId": 1,
+    "brandKit": {
+      "tokens": {
+        "primary": "#2563eb"
+      }
+    },
+    "honoreesName": "Ana y Luis"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Dry-run resolution: SystemDefault -> preset -> kit -> overrides. Nothing is
+  persisted.
+
+  `brandKitId` (an existing, saved kit) and `brandKit` (inline, unsaved) are
+  mutually exclusive — sending both is a 400.
+
+  Response shape: `{ eventTheme, warnings: string[] }`. `warnings` carries
+  non-blocking contrast issues found on the RESOLVED tokens (e.g. a kit that
+  only sets `primary` against an inherited `onPrimary`) — it never blocks the
+  preview.
+}

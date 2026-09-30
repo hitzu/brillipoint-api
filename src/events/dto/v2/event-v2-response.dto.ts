@@ -1,18 +1,16 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Expose, Type } from 'class-transformer';
-import { IsDate, IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
+import {
+  IsDate,
+  IsIn,
+  IsNumber,
+  IsObject,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { EventThemeDto } from '../event-theme/event-theme.dto';
+import type { ThemeOverrides } from '../../theme/theme.types';
 
-/**
- * v2 event read model. Schedule/location come ONLY from the contract's
- * EVENT booking — there is no fallback to the legacy `Event` columns. An
- * event whose contract has no EVENT booking returns null schedule/location
- * and `status: 'finished'`. See `odd/tasks/event-fields-deprecation.md`,
- * "Phase 1b".
- *
- * Deprecated v1 fields (serviceTypeId, printTemplate(s), decorativeIcon,
- * serviceLocationUrl) are intentionally omitted here.
- */
 export class EventV2ResponseDto {
   @Expose()
   @ApiProperty()
@@ -59,7 +57,8 @@ export class EventV2ResponseDto {
   @Expose()
   @ApiPropertyOptional({
     nullable: true,
-    description: "From the contract's EVENT booking; null when there is no EVENT booking",
+    description:
+      "From the contract's EVENT booking; null when there is no EVENT booking",
   })
   @IsString()
   @IsOptional()
@@ -68,7 +67,7 @@ export class EventV2ResponseDto {
   @Expose()
   @ApiPropertyOptional({
     nullable: true,
-    description: "From booking.mapsUrl; null when there is no EVENT booking",
+    description: 'From booking.mapsUrl; null when there is no EVENT booking',
   })
   @IsString()
   @IsOptional()
@@ -77,7 +76,8 @@ export class EventV2ResponseDto {
   @Expose()
   @ApiPropertyOptional({
     nullable: true,
-    description: "From the contract's EVENT booking; null when there is no EVENT booking",
+    description:
+      "From the contract's EVENT booking; null when there is no EVENT booking",
   })
   @IsDate()
   @IsOptional()
@@ -86,14 +86,19 @@ export class EventV2ResponseDto {
   @Expose()
   @ApiPropertyOptional({
     nullable: true,
-    description: "From the contract's EVENT booking; null when there is no EVENT booking",
+    description:
+      "From the contract's EVENT booking; null when there is no EVENT booking",
   })
   @IsDate()
   @IsOptional()
   serviceEndsAt?: Date | null;
 
   @Expose()
-  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Id of the contract EVENT booking, or null when there is none' })
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: 'Id of the contract EVENT booking, or null when there is none',
+  })
   @IsNumber()
   @IsOptional()
   bookingId!: number | null;
@@ -101,7 +106,8 @@ export class EventV2ResponseDto {
   @Expose()
   @ApiProperty({
     enum: ['active', 'finished'],
-    description: "Computed from the EVENT booking's serviceStartsAt; 'finished' when there is no EVENT booking",
+    description:
+      "Computed from the EVENT booking's serviceStartsAt; 'finished' when there is no EVENT booking",
   })
   @IsIn(['active', 'finished'])
   status!: 'active' | 'finished';
@@ -140,4 +146,24 @@ export class EventV2ResponseDto {
   @IsOptional()
   @Type(() => EventThemeDto)
   eventTheme?: EventThemeDto;
+
+  @Expose()
+  @ApiPropertyOptional({
+    type: Number,
+    description: 'Brand kit id (client theme kit)',
+    nullable: true,
+  })
+  @IsNumber()
+  @IsOptional()
+  brandKitId?: number | null;
+
+  @Expose()
+  @ApiPropertyOptional({
+    type: Object,
+    description: 'Per-event theme overrides',
+    nullable: true,
+  })
+  @IsObject()
+  @IsOptional()
+  themeOverrides?: ThemeOverrides | null;
 }

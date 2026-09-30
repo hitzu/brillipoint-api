@@ -1,0 +1,76 @@
+meta {
+  name: 05 - patch event (preset + overrides)
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{base_url}}/events/{{event_id}}
+  body: json
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{token}}
+}
+
+body:json {
+  {
+    "eventThemeId": {{preset_id}},
+    "themeOverrides": {
+      "images": {
+        "cover": {
+          "path": "{{cover_path}}",
+          "url": "{{cover_public_url}}",
+          "alt": {
+            "es": "Portada del evento",
+            "en": "Event cover"
+          }
+        }
+      },
+      "decorations": {
+        "confetti": {
+          "enabled": true,
+          "colors": ["#ec4899", "#a855f7", "#f59e0b"],
+          "shapes": ["circle", "star"],
+          "amount": 120
+        }
+      }
+    }
+  }
+}
+
+tests {
+  test("assigns the preset and saves the event-level theme overrides", function () {
+    expect(res.getStatus()).to.equal(200);
+    const body = res.getBody();
+    expect(body.id).to.be.a("number");
+    expect(body.eventThemeId).to.equal(Number(bru.getVar('preset_id')));
+    expect(body.themeOverrides).to.be.an("object");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Purpose: persist the party flow's per-event overrides (cover image +
+  confetti) previewed in step 02, on an EXISTING event.
+
+  Inputs: `event_id`, `cover_path` / `cover_public_url` (from steps 03-04 —
+  if you skipped the manual upload steps, either drop `images.cover` from
+  the body or supply your own already-uploaded `{ path, url }`).
+
+  Sets: nothing further — step 06 reads the saved result back.
+
+  Response fields that matter: the full updated event; `themeOverrides` now
+  contains exactly this body's `themeOverrides` (REPLACED, not merged with
+  whatever was there before).
+
+  `eventThemeId` assigns the preset picked in step 01 (`preset_id`); an
+  unknown id returns 404 `EVENT_THEME_NOT_FOUND`. Sending
+  `"eventThemeId": null` removes the preset and the event renders on the
+  SystemDefault base layer.
+}

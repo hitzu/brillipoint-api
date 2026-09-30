@@ -1,0 +1,59 @@
+meta {
+  name: 07 - patch event (brand kit, no preset)
+  type: http
+  seq: 7
+}
+
+patch {
+  url: {{base_url}}/events/{{event_id}}
+  body: json
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{token}}
+}
+
+body:json {
+  {
+    "eventThemeId": null,
+    "brandKitId": {{brand_kit_id}}
+  }
+}
+
+tests {
+  test("assigns the brand kit to the event", function () {
+    expect(res.getStatus()).to.equal(200);
+    const body = res.getBody();
+    expect(body.id).to.be.a("number");
+    expect(body.brandKitId).to.equal(Number(bru.getVar('brand_kit_id')));
+    expect(body.eventThemeId).to.equal(null);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Purpose: assign the saved kit (steps 01-05) to an existing event — this
+  is the ONLY save step in the company flow, unlike the party flow's
+  cover/confetti `themeOverrides`.
+
+  Inputs: `event_id`, `brand_kit_id`.
+
+  Sets: nothing further — step 08 reads the saved result back.
+
+  Response fields that matter: the full updated event; `brandKitId` now
+  equals this body's value.
+
+  No preset is involved: `"eventThemeId": null` explicitly clears any
+  preset, so resolution is `SystemDefault -> brand kit -> event overrides`.
+  SystemDefault is always the base layer, so the theme still resolves
+  completely without a preset. To layer the kit over a preset instead, send
+  that preset's id.
+
+  `brandKitId: null` removes the assignment and falls back to whatever base
+  layer remains (preset, or SystemDefault alone).
+}

@@ -1,0 +1,54 @@
+meta {
+  name: 04 - put logo file (signed url) [manual]
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{logo_signed_url}}
+  body: json
+  auth: none
+}
+
+headers {
+  content-type: {{logo_mime}}
+}
+
+script:pre-request {
+  /**
+   * Uploads a binary file to the Supabase signed URL from step 03.
+   *
+   * IMPORTANT:
+   * - This request needs Bruno "Developer Mode" enabled to use `fs`.
+   * - Set `logo_file_path` in your environment (absolute path OR relative
+   *   to this .bru file) to a real image (png/jpeg/webp/svg) on disk.
+   */
+  const { readFileSync } = require('fs');
+  const path = require('path');
+
+  const inputPath = bru.getVar('logo_file_path');
+  if (!inputPath) {
+    throw new Error('Missing env var: logo_file_path');
+  }
+
+  const absolutePath = path.isAbsolute(inputPath)
+    ? inputPath
+    : path.join(bru.cwd(), inputPath);
+
+  const fileBuffer = readFileSync(absolutePath);
+  req.setHeader('Content-Type', bru.getVar('logo_mime') || 'application/octet-stream');
+  req.setHeader('Content-Length', String(fileBuffer.length));
+  req.setBody(fileBuffer);
+}
+
+docs {
+  Manual-only, excluded from any automated run: needs Bruno Developer Mode
+  (`fs` access) and a real file on disk at `logo_file_path`. Run step 03
+  first to populate `{{logo_signed_url}}` / `{{logo_mime}}`.
+
+  Inputs: `logo_signed_url` (step 03), `logo_file_path` (set by you in the
+  environment), `logo_mime` (step 03).
+
+  Sets: nothing further — the file is now at `logo_path` in the bucket from
+  step 03; `logo_public_url` is the URL to store.
+}

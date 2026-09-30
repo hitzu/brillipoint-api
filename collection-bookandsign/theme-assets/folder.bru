@@ -1,0 +1,35 @@
+meta {
+  name: theme-assets
+  seq: 1
+}
+
+auth {
+  mode: inherit
+}
+
+docs {
+  Staff-only signed upload URLs for theme image assets (T4,
+  `odd/tasks/theme-authoring.md`). Supabase-hosted, same design as
+  `contracts/preparation-profile/upload-url` — external client URLs are
+  never stored.
+
+  Flow: create the owner first (a brand kit via `POST /brand-kits`, a
+  preset via `POST /events/themes`, or reference an existing event), call
+  `POST /theme-assets/upload-url` to get a signed upload URL, upload the
+  file directly to `signedUrl`, then `PATCH` the owner's overrides with
+  `{ path, url: publicUrl }` in the matching image slot
+  (`images.<slot>` — e.g. `images.logo`).
+
+  `ownerType` -> storage folder: `preset` -> `themes/presets/{ownerId}/...`,
+  `brand-kit` -> `themes/brand-kits/{ownerId}/...`,
+  `event` -> `themes/events/{ownerId}/...`.
+
+  Mime whitelist: `image/png`, `image/jpeg`, `image/webp` on every slot;
+  `image/svg+xml` only on `logo`, `splashIcon` and `watermark`. Any other
+  mime, or svg on another slot, returns 422.
+
+  404 when the owner does not exist or is soft-deleted (a soft-deleted
+  brand kit is treated as not found).
+
+  The `cover` slot's 4:5 aspect ratio is validated client-side, not here.
+}

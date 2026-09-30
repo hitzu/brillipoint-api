@@ -8,16 +8,20 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { plainToInstance } from 'class-transformer';
 import { PinoLogger } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
-import { In, QueryFailedError, Repository } from 'typeorm';
+import { EntityManager, In, QueryFailedError, Repository } from 'typeorm';
 import { EXCEPTION_RESPONSE } from '../config/errors/exception-response.config';
 import { isUniqueViolation } from '../config/errors/exceptions-handler';
 import { Booking } from '../bookings/entities/booking.entity';
 import { BOOKING_PURPOSE } from '../bookings/constants/booking_purpose.enum';
+import { BrandKit } from '../brand-kits/entities/brand-kit.entity';
 import { CreateEventDto } from './dto/create-event.dto';
 import { EventResponseDto } from './dto/event-response.dto';
 import { EventV2ResponseDto } from './dto/v2/event-v2-response.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { Event } from './entities/event.entity';
+import { EventTheme } from './entities/event-themes.entity';
+import { EventThemeService } from './event-theme.service';
+import { withThemeWriteLock } from './theme/theme-write-lock';
 
 const PUBLIC_EVENT_FINISHED_AFTER_DAYS = 30;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -29,72 +33,75 @@ export class EventsService {
     private readonly eventRepository: Repository<Event>,
     @InjectRepository(Booking)
     private readonly bookingRepository: Repository<Booking>,
+    private readonly eventThemeService: EventThemeService,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(EventsService.name);
   }
 
   async create(dto: CreateEventDto): Promise<EventResponseDto> {
-    if (
-      dto.serviceStartsAt != null &&
-      dto.serviceEndsAt != null &&
-      dto.serviceEndsAt.getTime() <= dto.serviceStartsAt.getTime()
-    ) {
-      throw new BadRequestException(
-        'serviceEndsAt must be after serviceStartsAt',
-      );
-    }
-
-    const existing = await this.eventRepository.findOne({
-      where: { key: dto.key },
-    });
-    if (existing) {
-      throw new ConflictException(EXCEPTION_RESPONSE.EVENT_KEY_ALREADY_EXISTS);
-    }
-    const existingForContract = await this.eventRepository.findOne({
-      where: { contractId: dto.contractId },
-    });
-    if (existingForContract) {
-      throw new ConflictException(
-        EXCEPTION_RESPONSE.EVENT_CONTRACT_ALREADY_HAS_EVENT,
-      );
-    }
-    const token = randomUUID();
-    const entity = this.eventRepository.create({
-      contractId: dto.contractId,
-      key: dto.key,
-      token,
-      eventTypeId: dto.eventTypeId ?? null,
-      serviceTypeId: dto.serviceTypeId ?? null,
-      honoreesNames: dto.honoreesNames ?? null,
-      albumPhrase: dto.albumPhrase ?? null,
-      venueName: dto.venueName ?? null,
-      serviceLocationUrl: dto.serviceLocationUrl ?? null,
-      serviceStartsAt: dto.serviceStartsAt ?? null,
-      serviceEndsAt: dto.serviceEndsAt ?? null,
-      delegateName: dto.delegateName ?? null,
-      eventThemeId: dto.eventThemeId ?? null,
-      printTemplate: dto.printTemplate ?? 'polaroid_2',
-      printTemplates: dto.printTemplates ?? null,
-    });
-    let saved: Event;
-    try {
-      saved = await this.eventRepository.save(entity);
-    } catch (error) {
-      this.logger.error(error, 'Error creating event');
+    return withThemeWriteLock(this.eventRepository.manager, async (manager) => {
+      const events = manager.getRepository(Event);
       if (
-        isUniqueViolation(error) &&
-        error instanceof QueryFailedError &&
-        String(error.driverError?.detail ?? '').includes('(contract_id)')
+        dto.serviceStartsAt != null &&
+        dto.serviceEndsAt != null &&
+        dto.serviceEndsAt.getTime() <= dto.serviceStartsAt.getTime()
       ) {
+        throw new BadRequestException(
+          'serviceEndsAt must be after serviceStartsAt',
+        );
+      }
+
+      const existing = await events.findOne({ where: { key: dto.key } });
+      if (existing) {
+        throw new ConflictException(EXCEPTION_RESPONSE.EVENT_KEY_ALREADY_EXISTS);
+      }
+      const existingForContract = await events.findOne({
+        where: { contractId: dto.contractId },
+      });
+      if (existingForContract) {
         throw new ConflictException(
           EXCEPTION_RESPONSE.EVENT_CONTRACT_ALREADY_HAS_EVENT,
         );
       }
-      throw error;
-    }
-    return plainToInstance(EventResponseDto, saved, {
-      excludeExtraneousValues: true,
+      const entity = events.create({
+        contractId: dto.contractId,
+        key: dto.key,
+        token: randomUUID(),
+        eventTypeId: dto.eventTypeId ?? null,
+        serviceTypeId: dto.serviceTypeId ?? null,
+        honoreesNames: dto.honoreesNames ?? null,
+        albumPhrase: dto.albumPhrase ?? null,
+        venueName: dto.venueName ?? null,
+        serviceLocationUrl: dto.serviceLocationUrl ?? null,
+        serviceStartsAt: dto.serviceStartsAt ?? null,
+        serviceEndsAt: dto.serviceEndsAt ?? null,
+        delegateName: dto.delegateName ?? null,
+        eventThemeId: dto.eventThemeId ?? null,
+        printTemplate: dto.printTemplate ?? 'polaroid_2',
+        printTemplates: dto.printTemplates ?? null,
+      });
+      await this.eventThemeService.validateEventThemeCreate(entity, manager);
+
+      let saved: Event;
+      try {
+        saved = await events.save(entity);
+      } catch (error) {
+        this.logger.error(error, 'Error creating event');
+        if (
+          isUniqueViolation(error) &&
+          error instanceof QueryFailedError &&
+          String(error.driverError?.detail ?? '').includes('(contract_id)')
+        ) {
+          throw new ConflictException(
+            EXCEPTION_RESPONSE.EVENT_CONTRACT_ALREADY_HAS_EVENT,
+          );
+        }
+        throw error;
+      }
+      return plainToInstance(EventResponseDto, saved, {
+        excludeExtraneousValues: true,
+      });
     });
   }
 
@@ -145,26 +152,80 @@ export class EventsService {
   }
 
   async update(id: number, dto: UpdateEventDto): Promise<EventResponseDto> {
-    const event = await this.eventRepository.findOne({ where: { id } });
-    if (!event) {
-      throw new NotFoundException(EXCEPTION_RESPONSE.EVENT_NOT_FOUND);
-    }
-    const serviceStartsAt = dto.serviceStartsAt ?? event.serviceStartsAt;
-    const serviceEndsAt = dto.serviceEndsAt ?? event.serviceEndsAt;
-    if (
-      serviceStartsAt != null &&
-      serviceEndsAt != null &&
-      serviceEndsAt.getTime() <= serviceStartsAt.getTime()
-    ) {
-      throw new BadRequestException(
-        'serviceEndsAt must be after serviceStartsAt',
-      );
-    }
-    Object.assign(event, dto);
-    const saved = await this.eventRepository.save(event);
-    return plainToInstance(EventResponseDto, saved, {
-      excludeExtraneousValues: true,
-    });
+    const updateWithManager = async (
+      manager: EntityManager,
+    ): Promise<EventResponseDto> => {
+      const events = manager.getRepository(Event);
+      const event = await events.findOne({ where: { id } });
+      if (!event) {
+        throw new NotFoundException(EXCEPTION_RESPONSE.EVENT_NOT_FOUND);
+      }
+      if (dto.eventThemeId != null) {
+        const presetExists = await manager
+          .getRepository(EventTheme)
+          .exists({ where: { id: dto.eventThemeId } });
+        if (!presetExists) {
+          throw new NotFoundException(EXCEPTION_RESPONSE.EVENT_THEME_NOT_FOUND);
+        }
+      }
+      if (dto.brandKitId != null) {
+        const brandKit = await manager
+          .getRepository(BrandKit)
+          .findOne({ where: { id: dto.brandKitId } });
+        if (!brandKit) {
+          throw new NotFoundException(EXCEPTION_RESPONSE.BRAND_KIT_NOT_FOUND);
+        }
+      }
+      const serviceStartsAt = dto.serviceStartsAt ?? event.serviceStartsAt;
+      const serviceEndsAt = dto.serviceEndsAt ?? event.serviceEndsAt;
+      if (
+        serviceStartsAt != null &&
+        serviceEndsAt != null &&
+        serviceEndsAt.getTime() <= serviceStartsAt.getTime()
+      ) {
+        throw new BadRequestException(
+          'serviceEndsAt must be after serviceStartsAt',
+        );
+      }
+
+      if (
+        dto.eventThemeId !== undefined ||
+        dto.brandKitId !== undefined ||
+        dto.themeOverrides !== undefined
+      ) {
+        await this.eventThemeService.validateEventThemeUpdate(
+          {
+            ...event,
+            ...dto,
+            eventThemeId:
+              dto.eventThemeId !== undefined
+                ? dto.eventThemeId
+                : event.eventThemeId,
+            brandKitId:
+              dto.brandKitId !== undefined ? dto.brandKitId : event.brandKitId,
+            themeOverrides:
+              dto.themeOverrides !== undefined
+                ? dto.themeOverrides
+                : event.themeOverrides,
+          },
+          manager,
+        );
+      }
+
+      Object.assign(event, dto);
+      const saved = await events.save(event);
+      return plainToInstance(EventResponseDto, saved, {
+        excludeExtraneousValues: true,
+      });
+    };
+
+    const changesTheme =
+      dto.eventThemeId !== undefined ||
+      dto.brandKitId !== undefined ||
+      dto.themeOverrides !== undefined;
+    return changesTheme
+      ? withThemeWriteLock(this.eventRepository.manager, updateWithManager)
+      : updateWithManager(this.eventRepository.manager);
   }
 
   async findOneByToken(token: string): Promise<Event> {

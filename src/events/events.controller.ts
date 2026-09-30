@@ -4,9 +4,9 @@ import {
   Get,
   HttpCode,
   HttpStatus,
-  Header,
   Headers,
   Param,
+  Query,
   ParseIntPipe,
   Patch,
   Post,
@@ -23,6 +23,7 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -33,8 +34,14 @@ import { CreateEventDto } from './dto/create-event.dto';
 import { BulkPhrasesDto } from './dto/event-phases/bulk-phrases.dto';
 import { PhraseByEventTokenDto } from './dto/event-phases/phrase-by-event-token.dto';
 import { CreateEventThemeDto } from './dto/event-theme/create-event-theme.dto';
+import { UpdateEventThemeDto } from './dto/event-theme/update-event-theme.dto';
 import { EventThemeDto } from './dto/event-theme/event-theme.dto';
+import {
+  PreviewThemeDto,
+  PreviewThemeResponseDto,
+} from './dto/event-theme/preview-theme.dto';
 import { PublicEventThemeResponseDto } from './dto/event-theme/public-event-theme.dto';
+import { resolvePublicThemeCache } from './theme/public-theme-cache';
 import { EventResponseDto } from './dto/event-response.dto';
 import { EventTypeDto } from './dto/event-types/event-types.dto';
 import { ServiceTypeDto } from './dto/service-types/service-types.dto';
@@ -55,7 +62,7 @@ export class EventsController {
     private readonly serviceTypeService: ServiceTypeService,
     private readonly eventPhraseService: EventPhrasesService,
     private readonly eventTheme: EventThemeService,
-  ) { }
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -108,7 +115,7 @@ export class EventsController {
     type: [EventThemeDto],
   })
   getEventThemes() {
-    return this.eventTheme.listEventThemes()
+    return this.eventTheme.listEventThemes();
   }
 
   @Post('themes')
@@ -128,10 +135,57 @@ export class EventsController {
     return this.eventTheme.createEventTheme(dto);
   }
 
+  @Post('themes/preview')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Preview a resolved event theme without persisting anything',
+  })
+  @ApiBody({ type: PreviewThemeDto })
+  @ApiOkResponse({
+    description: 'Resolved theme preview',
+    type: PreviewThemeResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description:
+      'Invalid request body, or both brandKitId and brandKit were sent',
+  })
+  @ApiNotFoundResponse({
+    description: 'Unknown eventThemeId or brandKitId',
+  })
+  previewEventTheme(
+    @Body(new ValidationPipe({ transform: true, whitelist: true }))
+    dto: PreviewThemeDto,
+  ) {
+    return this.eventTheme.previewTheme(dto);
+  }
+
+  @Patch('themes/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update an event theme preset' })
+  @ApiParam({ name: 'id', type: Number, description: 'Event theme id' })
+  @ApiBody({ type: UpdateEventThemeDto })
+  @ApiOkResponse({
+    description: 'Event theme updated successfully',
+    type: EventThemeDto,
+  })
+  @ApiBadRequestResponse({ description: 'Invalid request body' })
+  @ApiNotFoundResponse({ description: 'Event theme not found' })
+  updateEventTheme(
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ValidationPipe({ transform: true, whitelist: true }))
+    dto: UpdateEventThemeDto,
+  ) {
+    return this.eventTheme.updateEventTheme(id, dto);
+  }
+
   @Get('by-key/:key')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get event by key' })
-  @ApiParam({ name: 'key', type: String, description: 'Event key (unique identifier)' })
+  @ApiParam({
+    name: 'key',
+    type: String,
+    description: 'Event key (unique identifier)',
+  })
   @ApiOkResponse({
     description: 'Event found',
     type: EventResponseDto,
@@ -153,7 +207,6 @@ export class EventsController {
   getById(@Param('id', ParseIntPipe) id: number) {
     return this.eventsService.getById(id);
   }
-
 
   @Get('types')
   @HttpCode(HttpStatus.OK)
@@ -192,7 +245,13 @@ export class EventsController {
 
   @Get(':token/theme')
   @Public()
-  @Header('Cache-Control', 'public, max-age=604800, stale-while-revalidate=2592000')
+  @ApiQuery({
+    name: 'cache',
+    required: false,
+    enum: ['off'],
+    description:
+      'Use cache=off to bypass HTTP caching for a fresh theme response during visual testing.',
+  })
   @ApiOperation({ summary: 'Get public event theme by event token' })
   @ApiParam({ name: 'token', type: String, description: 'Event token (UUID)' })
   @ApiHeader({
@@ -209,14 +268,18 @@ export class EventsController {
   async getPublicThemeByEventToken(
     @Param('token') token: string,
     @Headers('if-none-match') ifNoneMatch: string | undefined,
+    @Query('cache') cache: string | undefined,
     @Res() response: Response,
   ): Promise<void> {
     const result = await this.eventTheme.getPublicThemeByEventToken(token);
+    const cacheDecision = resolvePublicThemeCache(cache, () =>
+      this.eventTheme.isMatchingEtag(ifNoneMatch, result.etag),
+    );
 
-    response.setHeader('Cache-Control', result.cacheControl);
+    response.setHeader('Cache-Control', cacheDecision.cacheControl);
     response.setHeader('ETag', result.etag);
 
-    if (this.eventTheme.isMatchingEtag(ifNoneMatch, result.etag)) {
+    if (cacheDecision.notModified) {
       response.status(HttpStatus.NOT_MODIFIED).send();
       return;
     }
@@ -244,9 +307,8 @@ export class EventsController {
   @ApiNotFoundResponse({ description: 'Event type not found' })
   bulkPhrasesByEventType(
     @Body(new ValidationPipe({ transform: true, whitelist: true }))
-    dto: BulkPhrasesDto
+    dto: BulkPhrasesDto,
   ) {
-    return this.eventPhraseService.bulkSeedPhrases(dto)
+    return this.eventPhraseService.bulkSeedPhrases(dto);
   }
-
 }

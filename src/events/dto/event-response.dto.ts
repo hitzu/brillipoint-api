@@ -1,9 +1,16 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Expose, Type } from 'class-transformer';
-import { IsDate, IsNumber, IsOptional, IsString } from 'class-validator';
+import {
+  IsDate,
+  IsNumber,
+  IsObject,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { EventThemeDto } from './event-theme/event-theme.dto';
 import { ServiceTypeDto } from './service-types/service-types.dto';
 import type { JsonValue } from './json-value';
+import type { ThemeOverrides } from '../theme/theme.types';
 
 export class EventResponseDto {
   @Expose()
@@ -120,17 +127,25 @@ export class EventResponseDto {
   @IsString()
   printTemplate!: string;
 
-  /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @Expose()
   @ApiPropertyOptional({
-    type: String,
-    description: 'Decorative icon',
+    type: Number,
+    description: 'Brand kit id (client theme kit)',
     nullable: true,
-    deprecated: true,
   })
-  @IsString()
+  @IsNumber()
   @IsOptional()
-  decorativeIcon?: string | null;
+  brandKitId?: number | null;
+
+  @Expose()
+  @ApiPropertyOptional({
+    type: Object,
+    description: 'Per-event theme overrides',
+    nullable: true,
+  })
+  @IsObject()
+  @IsOptional()
+  themeOverrides?: ThemeOverrides | null;
 
   /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @Expose()
@@ -154,11 +169,11 @@ export class EventResponseDto {
   @Expose()
   @ApiProperty()
   @Type(() => EventThemeDto)
-  eventTheme: EventThemeDto
+  eventTheme: EventThemeDto;
 
   /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @Expose()
   @ApiProperty({ deprecated: true })
   @Type(() => ServiceTypeDto)
-  serviceType: ServiceTypeDto
+  serviceType: ServiceTypeDto;
 }

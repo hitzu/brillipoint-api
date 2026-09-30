@@ -21,7 +21,6 @@ const DEPRECATED_RESPONSE_FIELDS = [
   'serviceTypeId',
   'printTemplate',
   'printTemplates',
-  'decorativeIcon',
   'serviceType',
 ] as const;
 
@@ -43,7 +42,6 @@ const DEPRECATED_UPDATE_FIELDS = [
   'serviceTypeId',
   'printTemplate',
   'printTemplates',
-  'decorativeIcon',
 ] as const;
 
 const NOT_DEPRECATED_RESPONSE_FIELDS = ['eventTypeId'] as const;
@@ -64,11 +62,14 @@ describe('v1 event DTO deprecation markers', () => {
     });
   });
 
-  describe.each(NOT_DEPRECATED_RESPONSE_FIELDS)('EventResponseDto.%s', (field) => {
-    it('is NOT marked deprecated', () => {
-      expect(isDeprecated(EventResponseDto.prototype, field)).toBe(false);
-    });
-  });
+  describe.each(NOT_DEPRECATED_RESPONSE_FIELDS)(
+    'EventResponseDto.%s',
+    (field) => {
+      it('is NOT marked deprecated', () => {
+        expect(isDeprecated(EventResponseDto.prototype, field)).toBe(false);
+      });
+    },
+  );
 
   describe.each(DEPRECATED_CREATE_FIELDS)('CreateEventDto.%s', (field) => {
     it('is marked deprecated in Swagger metadata', () => {

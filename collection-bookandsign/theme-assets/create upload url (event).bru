@@ -1,0 +1,39 @@
+meta {
+  name: create upload url (event)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/theme-assets/upload-url
+  body: json
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{token}}
+}
+
+vars:pre-request {
+  event_id: 1
+}
+
+body:json {
+  {
+    "ownerType": "event",
+    "ownerId": {{event_id}},
+    "slot": "hero",
+    "fileName": "hero.jpg",
+    "mime": "image/jpeg"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  404 `EVENT_NOT_FOUND` when the event does not exist. Used for one-off
+  per-event overrides (`events.theme_overrides.images.hero`).
+}

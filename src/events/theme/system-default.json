@@ -1,0 +1,26 @@
+{
+  "version": "2026-09-29",
+  "theme": {
+    "tokens": {
+      "background": "#ffffff",
+      "primary": "#111827",
+      "onPrimary": "#ffffff",
+      "secondary": "#6b7280",
+      "text": "#111827",
+      "textMuted": "#4b5563",
+      "surface": "#f3f4f6",
+      "fontHeading": "Inter",
+      "fontBody": "Inter",
+      "onSecondary": "#ffffff",
+      "onSurface": "#111827",
+      "accent": "#374151",
+      "surfaceBorder": "#e5e7eb",
+      "divider": "#e5e7eb",
+      "surfaceShadow": "0 10px 30px rgb(17 24 39 / 0.08)"
+    },
+    "images": {},
+    "decorations": {},
+    "socialCta": null,
+    "copy": {}
+  }
+}

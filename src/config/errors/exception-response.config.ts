@@ -44,6 +44,10 @@ enum ErrorMessages {
   CONTRACT_NOT_FOUND = 'CONTRACT_NOT_FOUND',
   BOOKING_OVERLAP = 'BOOKING_OVERLAP',
   BOOKING_CONTRACT_ALREADY_HAS_EVENT = 'BOOKING_CONTRACT_ALREADY_HAS_EVENT',
+  BRAND_KIT_NOT_FOUND = 'BRAND_KIT_NOT_FOUND',
+  BRAND_KIT_DELETE_PROTECTED = 'BRAND_KIT_DELETE_PROTECTED',
+  BRAND_KIT_KEY_ALREADY_EXISTS = 'BRAND_KIT_KEY_ALREADY_EXISTS',
+  EVENT_THEME_NOT_FOUND = 'EVENT_THEME_NOT_FOUND',
 }
 
 export const EXCEPTION_RESPONSE: Record<
@@ -230,5 +234,21 @@ export const EXCEPTION_RESPONSE: Record<
   [ErrorMessages.BOOKING_CONTRACT_ALREADY_HAS_EVENT]: {
     code: 45,
     message: 'this contract already has an event booking',
+  },
+  [ErrorMessages.BRAND_KIT_NOT_FOUND]: {
+    code: 46,
+    message: 'brand kit not found',
+  },
+  [ErrorMessages.BRAND_KIT_DELETE_PROTECTED]: {
+    code: 47,
+    message: 'the Brillipoint brand kit cannot be deleted',
+  },
+  [ErrorMessages.BRAND_KIT_KEY_ALREADY_EXISTS]: {
+    code: 48,
+    message: 'a brand kit with this key already exists',
+  },
+  [ErrorMessages.EVENT_THEME_NOT_FOUND]: {
+    code: 49,
+    message: 'event theme not found',
   },
 };

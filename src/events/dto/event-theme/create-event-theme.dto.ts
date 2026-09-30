@@ -7,9 +7,10 @@ import {
 import { Type } from 'class-transformer';
 import { IsOptional, IsString, ValidateNested } from 'class-validator';
 
-import { EventThemeTokensDto } from './public-event-theme.dto';
+import { PresetThemeTokensDto } from './public-event-theme.dto';
 import { IsThemeImageMap, ThemeImageAssetDto } from './theme-images.dto';
 import type { ThemeImageMap } from './theme-images.dto';
+import { IsTokenContrastValid } from '../../theme/validate-theme-overrides';
 
 @ApiExtraModels(ThemeImageAssetDto)
 export class CreateEventThemeDto {
@@ -21,11 +22,12 @@ export class CreateEventThemeDto {
   @IsString()
   name!: string;
 
-  @ApiPropertyOptional({ type: EventThemeTokensDto, nullable: true })
+  @ApiPropertyOptional({ type: PresetThemeTokensDto, nullable: true })
   @IsOptional()
   @ValidateNested()
-  @Type(() => EventThemeTokensDto)
-  tokens?: EventThemeTokensDto | null;
+  @Type(() => PresetThemeTokensDto)
+  @IsTokenContrastValid()
+  tokens?: PresetThemeTokensDto | null;
 
   @ApiPropertyOptional({
     type: 'object',

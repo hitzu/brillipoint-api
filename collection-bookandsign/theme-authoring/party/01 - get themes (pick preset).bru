@@ -1,0 +1,55 @@
+meta {
+  name: 01 - get themes (pick preset)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/events/themes
+  body: none
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{token}}
+}
+
+script:post-response {
+  // Picks the first preset for the rest of this flow. Guards against an
+  // empty list (no presets seeded yet) instead of setting an unusable var.
+  const themes = res.getBody();
+  if (Array.isArray(themes) && themes.length > 0) {
+    bru.setVar('preset_id', themes[0].id);
+    bru.setVar('preset_key', themes[0].key);
+  }
+}
+
+tests {
+  test("returns the preset list", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody()).to.be.an("array");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Purpose: list every `event_themes` preset so staff (or the interview
+  skill) can pick one to preview and then assign, either at event creation
+  (`POST /events { eventThemeId }`) or on an existing event via
+  `PATCH /events/:id { eventThemeId }` (step 05).
+
+  Inputs: none besides staff auth.
+
+  Sets: `preset_id` / `preset_key` from the first item in the response, for
+  step 02. If the list is empty, no var is set — run
+  `events/themes/create amor eterno theme.bru` first, or pick a different
+  `eventThemeId` manually.
+
+  Response fields that matter: each item is `{ id, key, name, tokens?,
+  images? }` — `tokens`/`images` are PARTIAL (missing values inherit
+  SystemDefault when resolved).
+}

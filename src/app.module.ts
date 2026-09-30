@@ -26,6 +26,8 @@ import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { CarouselsModule } from './carousels/carousels.module';
 import { ExtrasModule } from './extras/extras.module';
 import { BookingsModule } from './bookings/bookings.module';
+import { BrandKitsModule } from './brand-kits/brand-kits.module';
+import { ThemeAssetsModule } from './theme-assets/theme-assets.module';
 
 @Module({
   imports: [
@@ -42,6 +44,8 @@ import { BookingsModule } from './bookings/bookings.module';
       useFactory: () => getTypeOrmConfig(),
     }),
     BrandsModule,
+    BrandKitsModule,
+    ThemeAssetsModule,
     AuthModule,
     UserModule,
     TokenModule,
@@ -72,4 +76,4 @@ import { BookingsModule } from './bookings/bookings.module';
     },
   ],
 })
-export class AppModule { }
+export class AppModule {}

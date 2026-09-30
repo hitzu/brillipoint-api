@@ -1,0 +1,51 @@
+meta {
+  name: 03 - create upload url (brand kit logo) [manual]
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/theme-assets/upload-url
+  body: json
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{token}}
+}
+
+body:json {
+  {
+    "ownerType": "brand-kit",
+    "ownerId": {{brand_kit_id}},
+    "slot": "logo",
+    "fileName": "acme-logo.png",
+    "mime": "image/png"
+  }
+}
+
+script:post-response {
+  // Saves response values for step 04 (upload) and step 05 (patch kit).
+  bru.setVar('logo_path', res.body.path);
+  bru.setVar('logo_public_url', res.body.publicUrl);
+  bru.setVar('logo_signed_url', res.body.signedUrl);
+  bru.setVar('logo_mime', 'image/png');
+}
+
+docs {
+  Manual-only, excluded from any automated run: this returns a real
+  Supabase signed upload URL for the
+  `themes/brand-kits/{{brand_kit_id}}/logo/...` path. Runnable on its own
+  against a configured Supabase bucket, but not safe to run unattended in
+  CI.
+
+  Inputs: `brand_kit_id` (from step 01 — must reference an existing,
+  non-deleted kit or this returns 404).
+
+  Sets: `logo_path`, `logo_public_url`, `logo_signed_url`, `logo_mime` for
+  step 04 (upload) and step 05 (patch overrides with the stored slot).
+
+  Response fields that matter: `{ bucket, path, signedUrl, token,
+  publicUrl }`. `logo` also accepts `image/svg+xml` (422 for any other mime
+  on any other slot except `splashIcon`/`watermark`).
+}

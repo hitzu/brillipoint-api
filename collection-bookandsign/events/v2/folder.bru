@@ -20,7 +20,11 @@ docs {
   These deprecated v1 event fields are NOT returned by v2 and must not be
   sent to any v2 request (v2 is read-only anyway):
     serviceStartsAt, serviceEndsAt, venueName, serviceLocationUrl,
-    serviceTypeId, printTemplate, printTemplates, decorativeIcon
+    serviceTypeId, printTemplate, printTemplates
+
+  `decorativeIcon` was removed entirely (column dropped) in
+  `odd/tasks/theme-brand-kits.md` T4; it never existed in v2. v2 responses
+  include `brandKitId` / `themeOverrides` instead.
 
   v2 also has no `scheduleSource` field (removed once the event fallback
   was dropped — schedule is always sourced from the booking or absent).

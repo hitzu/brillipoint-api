@@ -32,8 +32,14 @@ settings {
 docs {
   Deprecated fields removed from this example body:
   venueName, serviceTypeId, serviceStartsAt, serviceEndsAt, printTemplate,
-  decorativeIcon, printTemplates (see the `events` folder docs). v1 still
-  accepts them — they are just no longer the source of truth for schedule/
-  status. To change an event's schedule/venue, update its EVENT booking
-  instead (`bookings` collection).
+  printTemplates (see the `events` folder docs). v1 still accepts them —
+  they are just no longer the source of truth for schedule/status. To
+  change an event's schedule/venue, update its EVENT booking instead
+  (`bookings` collection).
+
+  `decorativeIcon` was fully removed (column dropped, not just deprecated)
+  in `odd/tasks/theme-brand-kits.md` T4. Use `brandKitId` (must reference
+  an existing brand kit) and `themeOverrides` (shape-level validated
+  partial theme object) instead, e.g.:
+    { "brandKitId": 2, "themeOverrides": { "tokens": { "primary": "#111" } } }
 }

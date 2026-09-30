@@ -1,0 +1,45 @@
+meta {
+  name: update brand kit
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{base_url}}/brand-kits/{{brand_kit_id}}
+  body: json
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{token}}
+}
+
+body:json {
+  {
+    "name": "Acme Corporation",
+    "overrides": {
+      "tokens": {
+        "primary": "#222222",
+        "onPrimary": "#ffffff"
+      }
+    }
+  }
+}
+
+vars:pre-request {
+  brand_kit_id: 1
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  `key` is immutable and is silently stripped if sent (global
+  `ValidationPipe({ whitelist: true })`).
+
+  `overrides`, when sent, REPLACES the stored value entirely — it is not
+  deep-merged with the existing overrides. Omit `overrides` to leave it
+  untouched.
+}

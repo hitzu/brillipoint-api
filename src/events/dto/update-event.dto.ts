@@ -1,7 +1,19 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsDate, IsInt, IsNumber, IsOptional, IsString, IsUrl, Max, Min } from 'class-validator';
+import {
+  IsDate,
+  IsInt,
+  IsNumber,
+  IsObject,
+  IsOptional,
+  IsString,
+  IsUrl,
+  Max,
+  Min,
+} from 'class-validator';
 import type { JsonValue } from './json-value';
+import type { ThemeOverrides } from '../theme/theme.types';
+import { IsThemeOverrides } from '../theme/validate-theme-overrides';
 
 export class UpdateEventDto {
   @ApiPropertyOptional({
@@ -111,26 +123,42 @@ export class UpdateEventDto {
   @IsOptional()
   printTemplate?: string;
 
-  /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @ApiPropertyOptional({
-    type: String,
-    description: 'Ícono decorativo (rings | balloon | graduation | baby | xv | null)',
+    type: Number,
+    description:
+      'Theme preset (event_themes) id. Must reference an existing preset; `null` removes the preset so the event renders on the system default theme.',
     nullable: true,
-    deprecated: true,
   })
-  @IsString()
+  @IsInt()
   @IsOptional()
-  decorativeIcon?: string | null;
+  eventThemeId?: number | null;
+
+  @ApiPropertyOptional({
+    type: Number,
+    description:
+      'Brand kit id (client theme kit). Must reference an existing brand kit.',
+    nullable: true,
+  })
+  @IsInt()
+  @IsOptional()
+  brandKitId?: number | null;
+
+  @ApiPropertyOptional({
+    type: Object,
+    description: 'Per-event theme overrides (partial ThemeOverrides shape).',
+    nullable: true,
+  })
+  @IsObject()
+  @IsThemeOverrides()
+  @IsOptional()
+  themeOverrides?: ThemeOverrides | null;
 
   /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @ApiPropertyOptional({
     type: Object,
     description: 'Any valid JSON payload for print templates.',
     nullable: true,
-    example: [
-      { template_id: 'polaroid' },
-      { template_id: 'polaroid' },
-    ],
+    example: [{ template_id: 'polaroid' }, { template_id: 'polaroid' }],
     deprecated: true,
   })
   @IsOptional()

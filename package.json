@@ -18,7 +18,8 @@
     "db:status": "ts-node ./node_modules/typeorm/cli.js -d src/config/database/data-source.ts migration:show",
     "db:seed:from-production": "ts-node -r tsconfig-paths/register src/database/seeds/seed-from-production.ts",
     "test:e2e": "NODE_ENV=test jest --config ./test/jest-e2e.json",
-    "test:e2e:bruno": "bash scripts/run-bruno-e2e.sh"
+    "test:e2e:bruno": "bash scripts/run-bruno-e2e.sh",
+    "theme:export-default": "ts-node -r tsconfig-paths/register scripts/export-system-default-theme.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

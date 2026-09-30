@@ -1,0 +1,44 @@
+meta {
+  name: 08 - get public event theme (verify)
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{base_url}}/events/{{event_token}}/theme
+  body: none
+  auth: none
+}
+
+tests {
+  test("resolves the public theme with the assigned kit", function () {
+    expect(res.getStatus()).to.equal(200);
+    const body = res.getBody();
+    expect(body.eventTheme).to.be.an("object");
+    expect(body.eventTheme.tokens).to.be.an("object");
+    expect(body.eventTheme.tokens.primary).to.be.a("string");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Purpose: verify what the public (unauthenticated) endpoint now resolves
+  for this event, after step 07.
+
+  Inputs: `event_token` (the event's public token, NOT its numeric id).
+
+  Sets: nothing — terminal step of this flow.
+
+  Response fields that matter: `eventTheme.tokens.primary` (should be
+  "#0f766e" if this event has no preset overriding it), `eventTheme.images`
+  (should include `logo` if steps 03-05 ran), `eventTheme.socialCta`
+  (the kit's block, `brandKitKey` == this kit's `key`).
+
+  Caveat: this endpoint is cached for 5 minutes — a save in step 07 may not
+  be reflected here immediately even though it already is in staff reads
+  (`preview`, `get event by id`).
+}

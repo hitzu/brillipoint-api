@@ -1,0 +1,66 @@
+meta {
+  name: 02 - preview party theme
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/events/themes/preview
+  body: json
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{token}}
+}
+
+body:json {
+  {
+    "eventThemeId": {{preset_id}},
+    "themeOverrides": {
+      "decorations": {
+        "confetti": {
+          "enabled": true,
+          "colors": ["#ec4899", "#a855f7", "#f59e0b"],
+          "shapes": ["circle", "star"],
+          "amount": 120
+        }
+      }
+    },
+    "honoreesName": "Ana y Luis"
+  }
+}
+
+tests {
+  test("resolves a theme without persisting", function () {
+    expect(res.getStatus()).to.equal(200);
+    const body = res.getBody();
+    expect(body.eventTheme).to.be.an("object");
+    expect(body.eventTheme.tokens.primary).to.be.a("string");
+    expect(body.warnings).to.be.an("array");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Purpose: dry-run resolve `SystemDefault -> preset -> (no kit) ->
+  themeOverrides` for the picked preset, with the same per-event overrides
+  the party flow intends to save in step 05 (confetti decoration). Nothing
+  is persisted.
+
+  Inputs: `preset_id` (from step 01). `brandKitId`/`brandKit` are
+  deliberately omitted — the party flow has no kit, so `socialCta` in the
+  response falls back to the Brillipoint default kit.
+
+  Sets: nothing (read-only dry run).
+
+  Response fields that matter: `eventTheme.tokens.*` (resolved 9 required +
+  optional tokens), `eventTheme.decorations.confetti` (should reflect the
+  override above), `eventTheme.socialCta` (Brillipoint fallback),
+  `warnings` (string[] of non-blocking contrast issues on the RESOLVED
+  tokens — review before step 05 if this preset's tokens are unusual).
+}

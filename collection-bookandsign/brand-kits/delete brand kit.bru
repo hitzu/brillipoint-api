@@ -1,0 +1,30 @@
+meta {
+  name: delete brand kit
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{base_url}}/brand-kits/{{brand_kit_id}}
+  body: none
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{token}}
+}
+
+vars:pre-request {
+  brand_kit_id: 1
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Soft delete. 409 `BRAND_KIT_DELETE_PROTECTED` when targeting the
+  Brillipoint kit (`key = 'brillipoint'`). 404 `BRAND_KIT_NOT_FOUND` when
+  the kit does not exist.
+}

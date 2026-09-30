@@ -1,0 +1,28 @@
+meta {
+  name: get brand kit by id
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/brand-kits/{{brand_kit_id}}
+  body: none
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{token}}
+}
+
+vars:pre-request {
+  brand_kit_id: 1
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  404 `BRAND_KIT_NOT_FOUND` when the kit does not exist (or is soft-deleted).
+}
