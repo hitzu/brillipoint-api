@@ -88,7 +88,13 @@ const IMAGE_SLOT_KEYS = [
   'cover',
 ] as const;
 const DECORATION_KEYS = ['confetti', 'sparkles'] as const;
-const SOCIAL_KEYS = ['whatsapp', 'instagram', 'tiktok', 'facebook', 'url'] as const;
+const SOCIAL_KEYS = [
+  'whatsapp',
+  'instagram',
+  'tiktok',
+  'facebook',
+  'url',
+] as const;
 /** `decorativeIcon` is legacy (T4 migration carry-over): allowed, not documented. */
 const TOP_LEVEL_KEYS = [
   'tokens',
@@ -374,6 +380,17 @@ function validateImages(images: unknown, path: string, errors: string[]): void {
       !isHttpsUrl(value.link)
     ) {
       errors.push(`${slotPath}.link: must be an https URL`);
+    }
+
+    if (value.plate !== undefined) {
+      if (key !== 'splashIcon') {
+        errors.push(`${slotPath}.plate: only allowed on splashIcon`);
+      } else if (
+        typeof value.plate !== 'string' ||
+        !OPAQUE_HEX_COLOR_RE.test(value.plate)
+      ) {
+        errors.push(`${slotPath}.plate: must be an opaque #RRGGBB color`);
+      }
     }
   }
 }

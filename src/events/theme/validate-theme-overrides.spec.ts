@@ -256,6 +256,70 @@ describe('validateThemeOverrides', () => {
       expect(errors).toEqual([]);
     });
 
+    it('accepts a splashIcon slot with an opaque hex plate', () => {
+      // Arrange
+      const value = {
+        images: {
+          splashIcon: {
+            path: 'themes/x/splash.jpg',
+            url: 'https://cdn.example.com/splash.jpg',
+            plate: '#000000',
+          },
+        },
+      };
+
+      // Act
+      const errors = validateThemeOverrides(value);
+
+      // Assert
+      expect(errors).toEqual([]);
+    });
+
+    it.each(['#000', '#00000080', 'black'])(
+      'rejects splashIcon plate %s as not an opaque hex color',
+      (plate) => {
+        // Arrange
+        const value = {
+          images: {
+            splashIcon: {
+              path: 'themes/x/splash.jpg',
+              url: 'https://cdn.example.com/splash.jpg',
+              plate,
+            },
+          },
+        };
+
+        // Act
+        const errors = validateThemeOverrides(value);
+
+        // Assert
+        expect(errors).toContain(
+          'images.splashIcon.plate: must be an opaque #RRGGBB color',
+        );
+      },
+    );
+
+    it('rejects a plate on a slot other than splashIcon', () => {
+      // Arrange
+      const value = {
+        images: {
+          background: {
+            path: 'themes/x/bg.jpg',
+            url: 'https://cdn.example.com/bg.jpg',
+            plate: '#000000',
+          },
+        },
+      };
+
+      // Act
+      const errors = validateThemeOverrides(value);
+
+      // Assert
+      expect(errors).toContain(
+        'images.background.plate: only allowed on splashIcon',
+      );
+    });
+
     it('rejects an unknown image slot', () => {
       // Arrange
       const value = {

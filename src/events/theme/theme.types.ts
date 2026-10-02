@@ -51,9 +51,18 @@ export interface ThemeCoverImageSlot extends ThemeImageSlot {
   link?: string;
 }
 
+/**
+ * The `splashIcon` slot optionally carries `plate`: the opaque #RRGGBB
+ * background of the circular container holding the logo (e.g. #000000 for a
+ * JPG logo on a black background).
+ */
+export interface ThemeSplashIconImageSlot extends ThemeImageSlot {
+  plate?: string;
+}
+
 export interface ThemeImages {
   logo?: ThemeImageSlot;
-  splashIcon?: ThemeImageSlot;
+  splashIcon?: ThemeSplashIconImageSlot;
   hero?: ThemeImageSlot;
   watermark?: ThemeImageSlot;
   background?: ThemeImageSlot;
@@ -63,7 +72,7 @@ export interface ThemeImages {
 /** Overridable image slots: any slot may be explicitly removed with `null`. */
 export type ThemeImageOverrides = {
   logo?: ThemeImageSlot | null;
-  splashIcon?: ThemeImageSlot | null;
+  splashIcon?: ThemeSplashIconImageSlot | null;
   hero?: ThemeImageSlot | null;
   watermark?: ThemeImageSlot | null;
   background?: ThemeImageSlot | null;

@@ -71,6 +71,25 @@ describe('resolveTheme', () => {
     });
   });
 
+  it('keeps the plate of a splashIcon slot through the merge', () => {
+    // Arrange
+    const preset: ThemeOverrides = {
+      images: {
+        splashIcon: {
+          path: 'themes/x/splash.jpg',
+          url: 'https://cdn/splash.jpg',
+          plate: '#000000',
+        },
+      },
+    };
+
+    // Act
+    const resolved = resolveTheme(preset);
+
+    // Assert
+    expect(resolved.images.splashIcon?.plate).toBe('#000000');
+  });
+
   it('removes an image slot set by an earlier layer when a later layer sets it to null', () => {
     // Arrange
     const preset: ThemeOverrides = {

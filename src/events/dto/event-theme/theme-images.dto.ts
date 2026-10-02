@@ -4,6 +4,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Matches,
   Validate,
   ValidateNested,
   ValidatorConstraint,
@@ -15,6 +16,7 @@ import type {
   ThemeCoverImageSlot,
   ThemeImageOverrides,
   ThemeImageSlot,
+  ThemeSplashIconImageSlot,
 } from '../../theme/theme.types';
 
 /** Typed image slot keys accepted on a preset (mirrors `ThemeImageOverrides`). */
@@ -77,6 +79,25 @@ export class ThemeCoverImageAssetDto
   link?: string;
 }
 
+/** The `splashIcon` slot additionally carries an optional opaque `plate` color. */
+export class ThemeSplashIconImageAssetDto
+  extends ThemeImageAssetDto
+  implements ThemeSplashIconImageSlot
+{
+  @Expose()
+  @ApiPropertyOptional({
+    example: '#000000',
+    description:
+      'Opaque #RRGGBB background of the circular container holding the splash logo.',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^#[0-9a-fA-F]{6}$/, {
+    message: 'plate must be an opaque #RRGGBB color',
+  })
+  plate?: string;
+}
+
 export type ThemeImageMap = ThemeImageOverrides;
 
 @ValidatorConstraint({ name: 'isThemeImageMap', async: false })
@@ -103,7 +124,11 @@ export class IsThemeImageMapConstraint implements ValidatorConstraintInterface {
       }
 
       const dtoClass =
-        key === 'cover' ? ThemeCoverImageAssetDto : ThemeImageAssetDto;
+        key === 'cover'
+          ? ThemeCoverImageAssetDto
+          : key === 'splashIcon'
+            ? ThemeSplashIconImageAssetDto
+            : ThemeImageAssetDto;
       const instance = plainToInstance(dtoClass, entry);
       const errors = validateSync(instance, {
         whitelist: true,

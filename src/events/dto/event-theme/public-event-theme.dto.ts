@@ -11,6 +11,7 @@ import { IsOptional, IsString } from 'class-validator';
 import {
   ThemeCoverImageAssetDto,
   ThemeImageAssetDto,
+  ThemeSplashIconImageAssetDto,
 } from './theme-images.dto';
 import type {
   ThemeCopy,
@@ -246,7 +247,11 @@ export class EventThemeTokensDto {
  */
 export class PresetThemeTokensDto extends PartialType(EventThemeTokensDto) {}
 
-@ApiExtraModels(ThemeImageAssetDto, ThemeCoverImageAssetDto)
+@ApiExtraModels(
+  ThemeImageAssetDto,
+  ThemeCoverImageAssetDto,
+  ThemeSplashIconImageAssetDto,
+)
 export class PublicEventThemeDto {
   /** Preset id, or `null` when the event has no preset (system default only). */
   @ApiProperty({
@@ -291,7 +296,7 @@ export class PublicEventThemeDto {
     type: 'object',
     additionalProperties: { $ref: getSchemaPath(ThemeImageAssetDto) },
     description:
-      'Resolved typed image slots (logo, splashIcon, hero, watermark, background, cover). The cover slot additionally carries a `link` field (see ThemeCoverImageAssetDto).',
+      'Resolved typed image slots (logo, splashIcon, hero, watermark, background, cover). The cover slot additionally carries a `link` field (see ThemeCoverImageAssetDto). The splashIcon slot may carry an opaque `plate` color (see ThemeSplashIconImageAssetDto).',
   })
   images?: ThemeImages;
 
