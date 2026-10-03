@@ -1,6 +1,7 @@
 import { SYSTEM_DEFAULT_THEME } from './system-default.theme';
 import type {
   ResolvedTheme,
+  RewardPromo,
   SocialCta,
   ThemeCopy,
   ThemeDecorations,
@@ -148,6 +149,26 @@ function mergeSocialCta(
   return deepClone(override);
 }
 
+/**
+ * rewardPromo is an atomic block with plain layer semantics: undefined
+ * inherits, null removes (hides the promo), and a provided object replaces
+ * the whole block. Unlike socialCta there is no never-hide fallback chain.
+ */
+function mergeRewardPromo(
+  base: RewardPromo | null,
+  override: RewardPromo | null | undefined,
+): RewardPromo | null {
+  if (override === undefined) {
+    return base ? deepClone(base) : null;
+  }
+
+  if (override === null) {
+    return null;
+  }
+
+  return deepClone(override);
+}
+
 /** copy deep-merges by key; a null value for a key removes that key. */
 function mergeCopy(
   base: ThemeCopy,
@@ -176,8 +197,8 @@ function mergeCopy(
  * - `undefined` fields inherit the previous layer's value.
  * - `null` fields explicitly remove the value (where nullable).
  * - Arrays always replace, never concatenate.
- * - Plain objects deep-merge, except `socialCta` and image slots, which are
- *   atomic (whole-block replace).
+ * - Plain objects deep-merge, except `socialCta`, `rewardPromo` and image
+ *   slots, which are atomic (whole-block replace).
  * - Required tokens are always present in the result.
  * - Inputs (including `SYSTEM_DEFAULT_THEME`) are never mutated; every
  *   returned object is freshly created.
@@ -210,6 +231,7 @@ export function resolveTheme(
       images: mergeImages(result.images, layer.images),
       decorations: mergeDecorations(result.decorations, layer.decorations),
       socialCta: mergeSocialCta(result.socialCta, layer.socialCta),
+      rewardPromo: mergeRewardPromo(result.rewardPromo, layer.rewardPromo),
       copy: mergeCopy(result.copy, layer.copy),
     };
   }

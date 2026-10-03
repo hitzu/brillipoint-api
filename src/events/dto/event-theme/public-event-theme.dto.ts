@@ -17,6 +17,7 @@ import type {
   ThemeCopy,
   ThemeDecorations,
   ThemeImages,
+  RewardPromo,
   SocialCta,
   ThemeText,
   ThemeTemplateParams,
@@ -139,6 +140,30 @@ class SocialCtaDto implements SocialCta {
 
   @ApiPropertyOptional({ type: SocialCtaSocialsDto })
   socials?: SocialCta['socials'];
+}
+
+/**
+ * Resolved reward promo block: a plain layered block (no fallback chain),
+ * so it is `null` whenever the winning kit or an override hides it.
+ */
+class RewardPromoDto implements RewardPromo {
+  @ApiProperty({
+    example: '@brillipoint',
+    description: 'Social handle guests tag when sharing to get the reward.',
+  })
+  handle!: string;
+
+  @ApiPropertyOptional({
+    type: ThemeTextDto,
+    description: 'Promo headline; absent means the frontend i18n default.',
+  })
+  title?: ThemeText;
+
+  @ApiPropertyOptional({
+    type: ThemeTextDto,
+    description: 'Promo fine print; absent means no disclaimer.',
+  })
+  disclaimer?: ThemeText;
 }
 
 /** Per-event values available for `{{key}}` placeholders (T6, R6/R7). */
@@ -314,6 +339,14 @@ export class PublicEventThemeDto {
       'Resolved social CTA block (T6 whole-block fallback: event override, else client kit, else business kit, else the Brillipoint default kit). The block cannot be hidden: when no kit row is usable it falls back to the hardcoded Brillipoint block, so it is always present.',
   })
   socialCta?: SocialCta | null;
+
+  @ApiPropertyOptional({
+    type: RewardPromoDto,
+    nullable: true,
+    description:
+      'Resolved reward promo block (plain layered merge, no fallback chain): only the Brillipoint default kit carries one, so it is null whenever a client or business kit wins the visual layer, or when an override sets it to null.',
+  })
+  rewardPromo?: RewardPromo | null;
 
   @ApiPropertyOptional({
     type: 'object',

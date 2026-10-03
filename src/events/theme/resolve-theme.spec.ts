@@ -335,4 +335,61 @@ describe('resolveTheme', () => {
       SYSTEM_DEFAULT_THEME.tokens.onSurface,
     );
   });
+
+  describe('rewardPromo', () => {
+    const brillipointPromo = {
+      handle: '@brillipoint',
+      title: { text: { es: 'Regalo', en: 'Gift' } },
+      disclaimer: { text: { es: 'Aplica', en: 'Applies' } },
+    };
+
+    it('inherits the rewardPromo block from an earlier layer when a later layer omits it', () => {
+      // Arrange
+      const brandKit: ThemeOverrides = { rewardPromo: brillipointPromo };
+      const eventOverrides: ThemeOverrides = { tokens: { primary: '#ec4899' } };
+
+      // Act
+      const resolved = resolveTheme(brandKit, eventOverrides);
+
+      // Assert
+      expect(resolved.rewardPromo).toEqual(brillipointPromo);
+    });
+
+    it('removes the rewardPromo block when a later layer sets it to null', () => {
+      // Arrange
+      const brandKit: ThemeOverrides = { rewardPromo: brillipointPromo };
+      const eventOverrides: ThemeOverrides = { rewardPromo: null };
+
+      // Act
+      const resolved = resolveTheme(brandKit, eventOverrides);
+
+      // Assert
+      expect(resolved.rewardPromo).toBeNull();
+    });
+
+    it('replaces the whole rewardPromo block atomically rather than deep-merging it', () => {
+      // Arrange
+      const brandKit: ThemeOverrides = { rewardPromo: brillipointPromo };
+      const eventOverrides: ThemeOverrides = {
+        rewardPromo: { handle: '@otra.marca' },
+      };
+
+      // Act
+      const resolved = resolveTheme(brandKit, eventOverrides);
+
+      // Assert: title/disclaimer from the earlier layer are not kept.
+      expect(resolved.rewardPromo).toEqual({ handle: '@otra.marca' });
+    });
+
+    it('resolves rewardPromo to null when no layer provides it', () => {
+      // Arrange
+      const preset: ThemeOverrides = { tokens: { primary: '#ec4899' } };
+
+      // Act
+      const resolved = resolveTheme(preset);
+
+      // Assert
+      expect(resolved.rewardPromo).toBeNull();
+    });
+  });
 });

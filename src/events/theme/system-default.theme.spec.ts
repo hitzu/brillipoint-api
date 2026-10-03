@@ -36,3 +36,16 @@ describe('system-default.json', () => {
     }
   });
 });
+
+describe('SYSTEM_DEFAULT_THEME', () => {
+  it('carries no reward promo so only a kit can show one', () => {
+    // Arrange
+    const theme = SYSTEM_DEFAULT_THEME;
+
+    // Act
+    const rewardPromo = theme.rewardPromo;
+
+    // Assert
+    expect(rewardPromo).toBeNull();
+  });
+});

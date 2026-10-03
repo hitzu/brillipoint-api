@@ -37,12 +37,14 @@ import {
   type SocialCtaKitCandidate,
 } from './theme/resolve-social-cta';
 import {
+  applyTemplateFallback,
   applyTemplateFallbacksToCopy,
   applyTemplateFallbacksToSocialCta,
 } from './theme/apply-template-fallback';
 import { validatePublicThemeTokens } from './theme/validate-theme-overrides';
 import { EVENT_THEME_CACHE_CONTROL } from './theme/public-theme-cache';
 import { withThemeWriteLock } from './theme/theme-write-lock';
+import { toVisualKitLayer } from './theme/visual-kit-layer';
 
 /** A soft-deleted kit must never be treated as an applied layer (R3/T5). */
 function usableKit(kit: BrandKit | null | undefined): BrandKit | null {
@@ -366,7 +368,7 @@ export class EventThemeService {
       presetKey: preset?.key ?? 'system-default',
       presetName: preset?.name ?? 'System Default',
       presetLayer,
-      kitLayer: visualKit?.overrides,
+      kitLayer: toVisualKitLayer(visualKit),
       themeOverridesLayer: proposedEvent.themeOverrides ?? undefined,
       socialCandidates: [
         toSocialCtaKitCandidate(businessKit),
@@ -461,7 +463,7 @@ export class EventThemeService {
       presetKey: preset?.key ?? 'system-default',
       presetName: preset?.name ?? 'System Default',
       presetLayer,
-      kitLayer: visualKit?.overrides,
+      kitLayer: toVisualKitLayer(visualKit),
       themeOverridesLayer: event.themeOverrides ?? undefined,
       socialCandidates: [
         toSocialCtaKitCandidate(socialKits.clientKit),
@@ -537,6 +539,17 @@ export class EventThemeService {
       params,
     );
     const copy = applyTemplateFallbacksToCopy(resolved.copy, params);
+    const rewardPromo = resolved.rewardPromo
+      ? {
+          ...resolved.rewardPromo,
+          title: resolved.rewardPromo.title
+            ? applyTemplateFallback(resolved.rewardPromo.title, params)
+            : resolved.rewardPromo.title,
+          disclaimer: resolved.rewardPromo.disclaimer
+            ? applyTemplateFallback(resolved.rewardPromo.disclaimer, params)
+            : resolved.rewardPromo.disclaimer,
+        }
+      : null;
 
     return {
       id: input.presetId,
@@ -547,6 +560,7 @@ export class EventThemeService {
       images: resolved.images,
       decorations: resolved.decorations,
       socialCta,
+      rewardPromo,
       copy,
       params,
     };

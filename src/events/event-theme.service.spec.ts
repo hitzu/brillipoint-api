@@ -10,7 +10,10 @@ import { validate } from 'class-validator';
 import { AppDataSource as TestDataSource } from '../config/database/data-source';
 import { BrandKit } from '../brand-kits/entities/brand-kit.entity';
 import { BrandKitsService } from '../brand-kits/brand-kits.service';
-import { BRILLIPOINT_BRAND_KIT_KEY } from '../brand-kits/brillipoint-kit.seed';
+import {
+  BRILLIPOINT_BRAND_KIT_KEY,
+  BRILLIPOINT_BRAND_KIT_OVERRIDES,
+} from '../brand-kits/brillipoint-kit.seed';
 import { BrandKitFactory } from '../../test/factories/brand-kits/brand-kit.factory';
 import { BrandFactory } from '../../test/factories/brands/brands.factories';
 import { ContractFactory } from '../../test/factories/contracts/contract.factory';
@@ -1023,6 +1026,120 @@ describe('EventThemeService', () => {
 
       // Assert
       expect(result.body.eventTheme.images?.cover).toEqual(cover);
+    });
+
+    // ─── rewardPromo: only the Brillipoint kit carries one ──────────────────
+
+    it('returns the Brillipoint kit rewardPromo when the event has no client or business kit', async () => {
+      // Arrange
+      const rewardPromo = {
+        handle: '@brillipoint',
+        title: { text: { es: '¡Comparte y recibe un regalo!' } },
+      };
+      await brandKitFactory.create({
+        key: BRILLIPOINT_BRAND_KIT_KEY,
+        overrides: { rewardPromo },
+      });
+      const event = await eventFactory.create();
+
+      // Act
+      const result = await service.getPublicThemeByEventToken(event.token);
+
+      // Assert
+      expect(result.body.eventTheme.rewardPromo).toEqual(rewardPromo);
+    });
+
+    it('returns a null rewardPromo when a client kit wins the visual layer', async () => {
+      // Arrange
+      await brandKitFactory.create({
+        key: BRILLIPOINT_BRAND_KIT_KEY,
+        overrides: { rewardPromo: { handle: '@brillipoint' } },
+      });
+      const clientKit = await brandKitFactory.create({
+        overrides: { tokens: { primary: '#333333' } },
+      });
+      const event = await eventFactory.create({ brandKitId: clientKit.id });
+
+      // Act
+      const result = await service.getPublicThemeByEventToken(event.token);
+
+      // Assert
+      expect(result.body.eventTheme.rewardPromo).toBeNull();
+    });
+
+    // ─── rewardPromo safety net: the seed promo when the Brillipoint row lacks one ──
+
+    it('returns the seed rewardPromo when no kit row exists at all', async () => {
+      // Arrange
+      const event = await eventFactory.create();
+
+      // Act
+      const result = await service.getPublicThemeByEventToken(event.token);
+
+      // Assert
+      expect(result.body.eventTheme.rewardPromo).toEqual(
+        BRILLIPOINT_BRAND_KIT_OVERRIDES.rewardPromo,
+      );
+    });
+
+    it('returns the seed rewardPromo when the Brillipoint kit row has no rewardPromo', async () => {
+      // Arrange
+      await brandKitFactory.create({
+        key: BRILLIPOINT_BRAND_KIT_KEY,
+        overrides: { tokens: { primary: '#333333' } },
+      });
+      const event = await eventFactory.create();
+
+      // Act
+      const result = await service.getPublicThemeByEventToken(event.token);
+
+      // Assert
+      expect(result.body.eventTheme.rewardPromo).toEqual(
+        BRILLIPOINT_BRAND_KIT_OVERRIDES.rewardPromo,
+      );
+    });
+
+    it('returns a null rewardPromo when the Brillipoint kit row explicitly removes it', async () => {
+      // Arrange
+      await brandKitFactory.create({
+        key: BRILLIPOINT_BRAND_KIT_KEY,
+        overrides: { rewardPromo: null },
+      });
+      const event = await eventFactory.create();
+
+      // Act
+      const result = await service.getPublicThemeByEventToken(event.token);
+
+      // Assert
+      expect(result.body.eventTheme.rewardPromo).toBeNull();
+    });
+
+    it('returns a null rewardPromo for a client kit even when no Brillipoint row exists', async () => {
+      // Arrange
+      const clientKit = await brandKitFactory.create({
+        overrides: { tokens: { primary: '#333333' } },
+      });
+      const event = await eventFactory.create({ brandKitId: clientKit.id });
+
+      // Act
+      const result = await service.getPublicThemeByEventToken(event.token);
+
+      // Assert
+      expect(result.body.eventTheme.rewardPromo).toBeNull();
+    });
+
+    it('returns the event override rewardPromo over the seed promo', async () => {
+      // Arrange
+      const rewardPromo = { handle: '@mi_fiesta' };
+      const event = await eventFactory.create({
+        themeOverrides: { rewardPromo },
+      });
+
+      // Act
+      const result = await service.getPublicThemeByEventToken(event.token);
+
+      // Assert
+      expect(result.body.eventTheme.rewardPromo).toEqual(rewardPromo);
     });
   });
 

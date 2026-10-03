@@ -101,9 +101,13 @@ const TOP_LEVEL_KEYS = [
   'images',
   'decorations',
   'socialCta',
+  'rewardPromo',
   'copy',
   'decorativeIcon',
 ] as const;
+const REWARD_PROMO_KEYS = ['handle', 'title', 'disclaimer'] as const;
+/** `@` plus 1-30 Instagram/TikTok-style handle characters. */
+const REWARD_PROMO_HANDLE_RE = /^@[A-Za-z0-9._]{1,30}$/;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -579,6 +583,44 @@ function validateSocialCta(
   }
 }
 
+function validateRewardPromo(
+  rewardPromo: unknown,
+  path: string,
+  errors: string[],
+): void {
+  // Unlike socialCta, `null` is allowed: it hides the reward promo.
+  if (rewardPromo === null) {
+    return;
+  }
+
+  if (!isPlainObject(rewardPromo)) {
+    errors.push(`${path}: must be an object or null`);
+    return;
+  }
+
+  for (const key of Object.keys(rewardPromo)) {
+    if (!(REWARD_PROMO_KEYS as readonly string[]).includes(key)) {
+      errors.push(`${path}.${key}: unknown field`);
+    }
+  }
+
+  if (
+    typeof rewardPromo.handle !== 'string' ||
+    !REWARD_PROMO_HANDLE_RE.test(rewardPromo.handle)
+  ) {
+    errors.push(
+      `${path}.handle: must be an @handle of 1-30 letters, digits, dots or underscores`,
+    );
+  }
+
+  for (const field of ['title', 'disclaimer'] as const) {
+    const value = rewardPromo[field];
+    if (value !== undefined) {
+      validateThemeText(value, `${path}.${field}`, errors);
+    }
+  }
+}
+
 function validateCopy(copy: unknown, path: string, errors: string[]): void {
   if (!isPlainObject(copy)) {
     errors.push(`${path}: must be an object`);
@@ -627,6 +669,9 @@ export function validateThemeOverrides(value: unknown): string[] {
   }
   if (value.socialCta !== undefined) {
     validateSocialCta(value.socialCta, 'socialCta', errors);
+  }
+  if (value.rewardPromo !== undefined) {
+    validateRewardPromo(value.rewardPromo, 'rewardPromo', errors);
   }
   if (value.copy !== undefined) {
     validateCopy(value.copy, 'copy', errors);

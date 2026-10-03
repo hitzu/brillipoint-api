@@ -1,5 +1,5 @@
 {
-  "version": "2026-09-29",
+  "version": "2026-10-02",
   "theme": {
     "tokens": {
       "background": "#ffffff",
@@ -21,6 +21,7 @@
     "images": {},
     "decorations": {},
     "socialCta": null,
+    "rewardPromo": null,
     "copy": {}
   }
 }

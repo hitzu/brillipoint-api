@@ -731,6 +731,110 @@ describe('validateThemeOverrides', () => {
     });
   });
 
+  describe('rewardPromo', () => {
+    it('accepts null to hide the reward promo', () => {
+      // Arrange
+      const value = { rewardPromo: null };
+
+      // Act
+      const errors = validateThemeOverrides(value);
+
+      // Assert
+      expect(errors).toEqual([]);
+    });
+
+    it('accepts a handle with a localized title and disclaimer', () => {
+      // Arrange
+      const value = {
+        rewardPromo: {
+          handle: '@brillipoint',
+          title: { text: { es: 'Regalo', en: 'Gift' } },
+          disclaimer: { key: 'rewardPromo.disclaimer' },
+        },
+      };
+
+      // Act
+      const errors = validateThemeOverrides(value);
+
+      // Assert
+      expect(errors).toEqual([]);
+    });
+
+    it('rejects a handle without the leading @', () => {
+      // Arrange
+      const value = { rewardPromo: { handle: 'brillipoint' } };
+
+      // Act
+      const errors = validateThemeOverrides(value);
+
+      // Assert
+      expect(errors).toContain(
+        'rewardPromo.handle: must be an @handle of 1-30 letters, digits, dots or underscores',
+      );
+    });
+
+    it('rejects a missing handle', () => {
+      // Arrange
+      const value = {
+        rewardPromo: { title: { text: { es: 'Regalo' } } },
+      };
+
+      // Act
+      const errors = validateThemeOverrides(value);
+
+      // Assert
+      expect(errors).toContain(
+        'rewardPromo.handle: must be an @handle of 1-30 letters, digits, dots or underscores',
+      );
+    });
+
+    it('rejects a non-object block', () => {
+      // Arrange
+      const value = { rewardPromo: '@brillipoint' };
+
+      // Act
+      const errors = validateThemeOverrides(value);
+
+      // Assert
+      expect(errors).toContain('rewardPromo: must be an object or null');
+    });
+
+    it('rejects an unknown nested key', () => {
+      // Arrange
+      const value = {
+        rewardPromo: { handle: '@brillipoint', discount: '10%' },
+      };
+
+      // Act
+      const errors = validateThemeOverrides(value);
+
+      // Assert
+      expect(errors).toContain('rewardPromo.discount: unknown field');
+    });
+
+    it('rejects an unknown placeholder in the title', () => {
+      // Arrange
+      const value = {
+        rewardPromo: {
+          handle: '@brillipoint',
+          title: { text: { es: 'Regalo para {{guestName}}' } },
+        },
+      };
+
+      // Act
+      const errors = validateThemeOverrides(value);
+
+      // Assert
+      expect(
+        errors.some((error) =>
+          error.startsWith(
+            'rewardPromo.title: unknown placeholder "{{guestName}}"',
+          ),
+        ),
+      ).toBe(true);
+    });
+  });
+
   it('passes the Brillipoint brand kit seed against its own rules', () => {
     // Arrange
 

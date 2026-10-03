@@ -2,6 +2,9 @@ import { createHash } from 'node:crypto';
 
 export const INCLUDED_TABLES = [
   'users',
+  // Before `brands` and `events`: both reference it via `brand_kit_id`, and
+  // tables are copied in this order with FK constraints enforced.
+  'brand_kits',
   'brands',
   'terms',
   'products',

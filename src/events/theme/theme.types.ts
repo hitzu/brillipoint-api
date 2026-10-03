@@ -182,6 +182,21 @@ export interface SocialCta {
   socials?: SocialCtaSocials;
 }
 
+/**
+ * Reward promo shown to guests (gift button + modal, share-confirm tag copy):
+ * guests tag `handle` when sharing and get a reward. Merge treats this as
+ * ATOMIC, like `socialCta`, but WITHOUT a fallback chain: `null` hides it.
+ * Only the Brillipoint kit carries one today; the system default is `null`.
+ */
+export interface RewardPromo {
+  /** Social handle guests must tag, e.g. `@brillipoint`. */
+  handle: string;
+  /** Modal headline; absent means the frontend's i18n default. */
+  title?: ThemeText;
+  /** Fine print under the promo; absent means no disclaimer. */
+  disclaimer?: ThemeText;
+}
+
 /** Free-form copy map, deep-merged by key; a `null` value removes that key. */
 export type ThemeCopy = Record<string, ThemeText>;
 export type ThemeCopyOverrides = Record<string, ThemeText | null>;
@@ -201,6 +216,7 @@ export interface ThemeOverrides {
   images?: ThemeImageOverrides;
   decorations?: ThemeDecorationOverrides;
   socialCta?: SocialCta | null;
+  rewardPromo?: RewardPromo | null;
   copy?: ThemeCopyOverrides;
   /**
    * T4 migration-only field: preserves the legacy `events.decorative_icon`
@@ -219,5 +235,6 @@ export interface ResolvedTheme {
   images: ThemeImages;
   decorations: ThemeDecorations;
   socialCta: SocialCta | null;
+  rewardPromo: RewardPromo | null;
   copy: ThemeCopy;
 }
