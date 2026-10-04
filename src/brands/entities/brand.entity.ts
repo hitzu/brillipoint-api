@@ -1,11 +1,10 @@
-import { Column, Entity, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
+import { Column, Entity, OneToMany } from 'typeorm';
 
 import { BaseTimeEntity } from '../../common/entities/base-time.entity';
 import { Product } from '../../products/entities/product.entity';
 import { BrandDto } from '../dto/brand.dto';
 import { UseDto } from '../../common/dto/use-dto.decorator';
 import { BrandTerm } from '../../terms/entities/brand-term.entity';
-import { BrandKit } from '../../brand-kits/entities/brand-kit.entity';
 
 @Entity('brands')
 @UseDto(BrandDto)
@@ -34,16 +33,6 @@ export class Brand extends BaseTimeEntity {
     },
   })
   minAmountHoldSlot: number | null = null;
-
-  @Column('int', { name: 'brand_kit_id', nullable: true })
-  brandKitId: number | null = null;
-
-  @ManyToOne(() => BrandKit, (brandKit) => brandKit.brands, {
-    onDelete: 'RESTRICT',
-    nullable: true,
-  })
-  @JoinColumn({ name: 'brand_kit_id' })
-  brandKit?: BrandKit | null;
 
   @OneToMany(() => Product, (product) => product.brand)
   products!: Product[];

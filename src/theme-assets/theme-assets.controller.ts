@@ -25,8 +25,8 @@ export class ThemeAssetsController {
   @ApiOperation({
     summary: 'Create a signed upload URL for a theme image asset',
     description:
-      'Flow: create the owner first (a brand kit via POST /brand-kits, a ' +
-      'preset via POST /events/themes, or reference an existing event), ' +
+      'Flow: create the owner first (a preset via POST /events/themes, or ' +
+      'reference an existing event), ' +
       'then call this endpoint to get a signed upload URL, upload the file ' +
       'directly to `signedUrl`, and finally PATCH the owner overrides with ' +
       '`{ path, url: publicUrl }` in the matching image slot (`images.<slot>`). ' +
@@ -36,7 +36,7 @@ export class ThemeAssetsController {
   @ApiOkResponse({ type: ThemeAssetUploadUrlDto })
   @ApiNotFoundResponse({
     description:
-      'Owner not found: EVENT_THEME_NOT_FOUND, BRAND_KIT_NOT_FOUND or EVENT_NOT_FOUND',
+      'Owner not found: EVENT_THEME_NOT_FOUND or EVENT_NOT_FOUND',
   })
   @ApiUnprocessableEntityResponse({
     description: 'Mime type not allowed for the given slot',

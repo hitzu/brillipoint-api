@@ -8,7 +8,6 @@ import { plainToInstance } from 'class-transformer';
 import { randomUUID } from 'crypto';
 import { Repository } from 'typeorm';
 
-import { BrandKitsService } from '../brand-kits/brand-kits.service';
 import { StorageService } from '../common/storage/storage.service';
 import { EXCEPTION_RESPONSE } from '../config/errors/exception-response.config';
 import { EventTheme } from '../events/entities/event-themes.entity';
@@ -22,7 +21,6 @@ import { ThemeAssetUploadUrlDto } from './dto/theme-asset-upload-url.dto';
 
 const OWNER_TYPE_TO_FOLDER: Record<ThemeAssetOwnerType, string> = {
   [ThemeAssetOwnerType.PRESET]: 'presets',
-  [ThemeAssetOwnerType.BRAND_KIT]: 'brand-kits',
   [ThemeAssetOwnerType.EVENT]: 'events',
 };
 
@@ -44,7 +42,7 @@ const SVG_ALLOWED_SLOTS = new Set<ThemeAssetSlot>([
 
 /**
  * Signed upload URLs for theme image assets (T4/theme-authoring): the
- * client creates the owner (preset/brand kit/event) first, uploads to the
+ * client creates the owner (preset/event) first, uploads to the
  * returned `signedUrl`, then PATCHes the owner's overrides with
  * `{ path, url: publicUrl }` in the matching image slot. No drafts folder —
  * every upload is scoped to an existing owner.
@@ -56,7 +54,6 @@ export class ThemeAssetUploadsService {
     private readonly eventThemeRepository: Repository<EventTheme>,
     @InjectRepository(Event)
     private readonly eventRepository: Repository<Event>,
-    private readonly brandKitsService: BrandKitsService,
     private readonly storageService: StorageService,
   ) {}
 
@@ -97,13 +94,6 @@ export class ThemeAssetUploadsService {
         });
         if (!preset) {
           throw new NotFoundException(EXCEPTION_RESPONSE.EVENT_THEME_NOT_FOUND);
-        }
-        return;
-      }
-      case ThemeAssetOwnerType.BRAND_KIT: {
-        const kit = await this.brandKitsService.findById(ownerId);
-        if (!kit) {
-          throw new NotFoundException(EXCEPTION_RESPONSE.BRAND_KIT_NOT_FOUND);
         }
         return;
       }

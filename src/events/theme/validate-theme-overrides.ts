@@ -11,8 +11,7 @@ import type { ThemeTemplateParams } from './theme.types';
 
 /**
  * Pure validator for the `ThemeOverrides` shape shared by `event_themes`
- * presets, `brand_kits.overrides`, and `events.theme_overrides` (T7,
- * odd/tasks/theme-brand-kits.md). Returns human-readable error paths;
+ * presets and `events.theme_overrides`. Returns human-readable error paths;
  * an empty array means the value is valid. `null`/`undefined` are always
  * valid (absence means "inherit").
  */
@@ -20,7 +19,7 @@ import type { ThemeTemplateParams } from './theme.types';
 /** The only placeholder keys any `ThemeText` (or its params) may reference. */
 export const ALLOWED_TEMPLATE_PARAM_KEYS: ReadonlyArray<
   keyof ThemeTemplateParams
-> = ['honoreesName', 'brandName'];
+> = ['honoreesName'];
 
 const PLACEHOLDER_RE = /\{\{\s*(\w+)\s*\}\}/g;
 
@@ -533,17 +532,10 @@ function validateSocialCta(
   errors: string[],
 ): void {
   // No `null`: the socialCta block can never be hidden, so the chain always
-  // reaches the Brillipoint kit, our main acquisition point.
+  // reaches the Brillipoint default, our main acquisition point.
   if (!isPlainObject(socialCta)) {
     errors.push(`${path}: must be an object`);
     return;
-  }
-
-  if (
-    socialCta.brandKitKey !== undefined &&
-    typeof socialCta.brandKitKey !== 'string'
-  ) {
-    errors.push(`${path}.brandKitKey: must be a string`);
   }
 
   for (const field of ['headline', 'subtitle', 'followText'] as const) {

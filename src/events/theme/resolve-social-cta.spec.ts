@@ -1,18 +1,15 @@
 import { resolveSocialCta } from './resolve-social-cta';
-import type { SocialCta, ThemeOverrides } from './theme.types';
-
-function kit(
-  key: string,
-  name: string,
-  socialCta: SocialCta | null | undefined,
-): { key: string; name: string; overrides: ThemeOverrides } {
-  return { key, name, overrides: { socialCta } };
-}
+import type { SocialCta } from './theme.types';
 
 const whatsappAction: SocialCta['primaryAction'] = {
   channel: 'whatsapp',
   label: { text: { es: 'Reservar', en: 'Book' } },
   phone: '5210000000000',
+};
+
+const defaultBlock: SocialCta = {
+  headline: { text: { es: 'Default headline', en: 'Default headline' } },
+  primaryAction: { ...whatsappAction, phone: '5219999999999' },
 };
 
 describe('resolveSocialCta', () => {
@@ -21,110 +18,64 @@ describe('resolveSocialCta', () => {
     const eventOverride: SocialCta = { primaryAction: whatsappAction };
 
     // Act
-    const result = resolveSocialCta(eventOverride, [
-      kit('client', 'Client Co', { primaryAction: whatsappAction }),
-    ]);
+    const result = resolveSocialCta(eventOverride, defaultBlock);
 
     // Assert
-    expect(result.socialCta).toEqual(eventOverride);
-    expect(result.brandName).toBeUndefined();
+    expect(result).toEqual(eventOverride);
   });
 
-  it('treats an explicit null event override as inherit and falls through to the kits', () => {
+  it('treats an explicit null event override as no block and falls back to the default', () => {
     // Arrange — the Brillipoint CTA can never be hidden from an event theme
-    const clientBlock: SocialCta = { primaryAction: whatsappAction };
 
     // Act
-    const result = resolveSocialCta(null, [
-      kit('client', 'Client Co', clientBlock),
-    ]);
+    const result = resolveSocialCta(null, defaultBlock);
 
     // Assert
-    expect(result.socialCta).toEqual({ ...clientBlock, brandKitKey: 'client' });
-    expect(result.brandName).toBe('Client Co');
+    expect(result).toEqual(defaultBlock);
   });
 
-  it('falls through to the first kit when the event override is undefined', () => {
+  it('falls back to the default block when the event override is undefined', () => {
     // Arrange
-    const clientBlock: SocialCta = { primaryAction: whatsappAction };
 
     // Act
-    const result = resolveSocialCta(undefined, [
-      kit('client', 'Client Co', clientBlock),
-    ]);
+    const result = resolveSocialCta(undefined, defaultBlock);
 
     // Assert
-    expect(result.socialCta?.primaryAction).toEqual(whatsappAction);
-    expect(result.brandName).toBe('Client Co');
-    expect(result.socialCta?.brandKitKey).toBe('client');
+    expect(result).toEqual(defaultBlock);
   });
 
-  it('treats a null block on a kit as no block and continues to the next kit', () => {
-    // Arrange
-    const businessBlock: SocialCta = { primaryAction: whatsappAction };
-
-    // Act
-    const result = resolveSocialCta(undefined, [
-      kit('client', 'Client Co', null),
-      kit('business', 'Business Co', businessBlock),
-    ]);
-
-    // Assert
-    expect(result.brandName).toBe('Business Co');
-    expect(result.socialCta?.brandKitKey).toBe('business');
-  });
-
-  it('skips a kit block that has neither a primaryAction nor a non-empty social', () => {
+  it('skips an event override with neither a primaryAction nor a non-empty social', () => {
     // Arrange
     const unusable: SocialCta = { socials: { instagram: '' } };
-    const usable: SocialCta = {
+
+    // Act
+    const result = resolveSocialCta(unusable, defaultBlock);
+
+    // Assert
+    expect(result).toEqual(defaultBlock);
+  });
+
+  it('does not mix fields: picks the usable event override entirely', () => {
+    // Arrange
+    const eventOverride: SocialCta = {
       socials: { instagram: 'https://instagram.com/x' },
     };
 
     // Act
-    const result = resolveSocialCta(undefined, [
-      kit('client', 'Client Co', unusable),
-      kit('business', 'Business Co', usable),
-    ]);
+    const result = resolveSocialCta(eventOverride, defaultBlock);
 
     // Assert
-    expect(result.brandName).toBe('Business Co');
+    expect(result?.headline).toBeUndefined();
   });
 
-  it('does not mix fields across levels: picks the first usable block entirely', () => {
-    // Arrange
-    const clientBlock: SocialCta = {
-      headline: { text: { es: 'Client headline', en: 'Client headline' } },
-      primaryAction: whatsappAction,
-    };
-    const businessBlock: SocialCta = {
-      headline: { text: { es: 'Business headline', en: 'Business headline' } },
-      primaryAction: whatsappAction,
-    };
-
-    // Act
-    const result = resolveSocialCta(undefined, [
-      kit('client', 'Client Co', clientBlock),
-      kit('business', 'Business Co', businessBlock),
-    ]);
-
-    // Assert
-    expect(result.socialCta?.headline).toEqual(clientBlock.headline);
-  });
-
-  it('returns socialCta null when nothing usable exists anywhere', () => {
+  it('returns null when nothing usable exists', () => {
     // Arrange
 
     // Act
-    const result = resolveSocialCta(undefined, [
-      kit('client', 'Client Co', undefined),
-      null,
-      undefined,
-    ]);
+    const result = resolveSocialCta(undefined, { socials: { tiktok: '' } });
 
     // Assert
-    expect(result.socialCta).toBeNull();
-    expect(result.brandName).toBeUndefined();
+    expect(result).toBeNull();
   });
 
   it('removes the primary channel entry from socials when present', () => {
@@ -142,14 +93,10 @@ describe('resolveSocialCta', () => {
     };
 
     // Act
-    const result = resolveSocialCta(undefined, [
-      kit('client', 'Client Co', block),
-    ]);
+    const result = resolveSocialCta(block, defaultBlock);
 
     // Assert
-    expect(result.socialCta?.socials).toEqual({
-      tiktok: 'https://tiktok.com/x',
-    });
+    expect(result?.socials).toEqual({ tiktok: 'https://tiktok.com/x' });
   });
 
   it('drops empty-string and null socials', () => {
@@ -164,41 +111,26 @@ describe('resolveSocialCta', () => {
     };
 
     // Act
-    const result = resolveSocialCta(undefined, [
-      kit('client', 'Client Co', block),
-    ]);
+    const result = resolveSocialCta(block, defaultBlock);
 
     // Assert
-    expect(result.socialCta?.socials).toEqual({
-      tiktok: 'https://tiktok.com/x',
-    });
+    expect(result?.socials).toEqual({ tiktok: 'https://tiktok.com/x' });
   });
 
-  it('sets brandKitKey to the supplying kit key even when the block did not carry one', () => {
-    // Arrange
-    const block: SocialCta = { primaryAction: whatsappAction };
-
-    // Act
-    const result = resolveSocialCta(undefined, [
-      kit('brillipoint', 'Brillipoint', block),
-    ]);
-
-    // Assert
-    expect(result.socialCta?.brandKitKey).toBe('brillipoint');
-  });
-
-  it('keeps the event override own brandKitKey unchanged when it supplies the block', () => {
+  it('keeps the event override own headline unchanged when it supplies the block', () => {
     // Arrange
     const eventOverride: SocialCta = {
-      brandKitKey: 'custom-key',
+      headline: { text: { es: 'Mi fiesta', en: 'My party' } },
       primaryAction: whatsappAction,
     };
 
     // Act
-    const result = resolveSocialCta(eventOverride, []);
+    const result = resolveSocialCta(eventOverride, defaultBlock);
 
     // Assert
-    expect(result.socialCta?.brandKitKey).toBe('custom-key');
+    expect(result?.headline).toEqual({
+      text: { es: 'Mi fiesta', en: 'My party' },
+    });
   });
 
   it('removes socials.whatsapp when whatsapp is the primary channel, keeping other socials', () => {
@@ -212,14 +144,10 @@ describe('resolveSocialCta', () => {
     };
 
     // Act
-    const result = resolveSocialCta(undefined, [
-      kit('client', 'Client Co', block),
-    ]);
+    const result = resolveSocialCta(block, defaultBlock);
 
     // Assert
-    expect(result.socialCta?.socials).toEqual({
-      url: 'https://brillipoint.com',
-    });
+    expect(result?.socials).toEqual({ url: 'https://brillipoint.com' });
   });
 
   it('accepts a website url as the primary channel', () => {
@@ -234,14 +162,10 @@ describe('resolveSocialCta', () => {
     };
 
     // Act
-    const result = resolveSocialCta(undefined, [
-      kit('client', 'Client Co', block),
-    ]);
+    const result = resolveSocialCta(block, defaultBlock);
 
     // Assert
-    expect(result.socialCta?.primaryAction).toEqual(block.primaryAction);
-    expect(result.socialCta?.socials).toEqual({
-      instagram: 'https://instagram.com/x',
-    });
+    expect(result?.primaryAction).toEqual(block.primaryAction);
+    expect(result?.socials).toEqual({ instagram: 'https://instagram.com/x' });
   });
 });

@@ -15,8 +15,6 @@ import { EXCEPTION_RESPONSE } from '../config/errors/exception-response.config';
 import { ContractFactory } from '../../test/factories/contracts/contract.factory';
 import { EventFactory } from '../../test/factories/events/event.factory';
 import { BookingFactory } from '../../test/factories/bookings/booking.factory';
-import { BrandKitFactory } from '../../test/factories/brand-kits/brand-kit.factory';
-import { BrandFactory } from '../../test/factories/brands/brands.factories';
 import { EventThemeFactory } from '../../test/factories/events/event-theme.factory';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
@@ -29,15 +27,12 @@ import { ServiceTypeFactory } from '../../test/factories/events/service-type.fac
 import { PinoLogger } from 'nestjs-pino';
 import { Booking } from '../bookings/entities/booking.entity';
 import { BOOKING_PURPOSE } from '../bookings/constants/booking_purpose.enum';
-import { BrandKitsService } from '../brand-kits/brand-kits.service';
-import { BrandKit } from '../brand-kits/entities/brand-kit.entity';
 
 describe('EventsService', () => {
   let service: EventsService;
   let eventThemeService: EventThemeService;
   let eventFactory: EventFactory;
   let bookingFactory: BookingFactory;
-  let brandKitFactory: BrandKitFactory;
   let eventThemeFactory: EventThemeFactory;
 
   beforeEach(async () => {
@@ -53,7 +48,6 @@ describe('EventsService', () => {
       providers: [
         EventsService,
         EventThemeService,
-        BrandKitsService,
         {
           provide: getRepositoryToken(Event),
           useValue: TestDataSource.getRepository(Event),
@@ -61,10 +55,6 @@ describe('EventsService', () => {
         {
           provide: getRepositoryToken(Booking),
           useValue: TestDataSource.getRepository(Booking),
-        },
-        {
-          provide: getRepositoryToken(BrandKit),
-          useValue: TestDataSource.getRepository(BrandKit),
         },
         {
           provide: getRepositoryToken(EventTheme),
@@ -85,7 +75,6 @@ describe('EventsService', () => {
     eventThemeService = module.get<EventThemeService>(EventThemeService);
     eventFactory = new EventFactory(TestDataSource);
     bookingFactory = new BookingFactory(TestDataSource);
-    brandKitFactory = new BrandKitFactory(TestDataSource);
     eventThemeFactory = new EventThemeFactory(TestDataSource);
   });
 
@@ -144,33 +133,6 @@ describe('EventsService', () => {
         contractId: contract.id,
         eventTypeId: eventType.id,
         eventThemeId: preset.id,
-        key,
-      });
-
-      // Assert
-      await expect(create).rejects.toBeInstanceOf(UnprocessableEntityException);
-      const persistedCount = await TestDataSource.getRepository(Event).countBy({ key });
-      expect(persistedCount).toBe(0);
-    });
-
-    it('should reject an invalid contract brand kit fallback and leave no event row persisted', async () => {
-      // Arrange
-      const brandKit = await brandKitFactory.create({
-        overrides: { tokens: { primary: '#ffffff' } },
-      });
-      const brand = await new BrandFactory(TestDataSource).create({
-        brandKitId: brandKit.id,
-      });
-      const contract = await new ContractFactory(TestDataSource).create({
-        brandId: brand.id,
-      });
-      const eventType = await new EventTypeFactory(TestDataSource).create();
-      const key = 'create-invalid-contract-theme';
-
-      // Act
-      const create = service.create({
-        contractId: contract.id,
-        eventTypeId: eventType.id,
         key,
       });
 
@@ -468,25 +430,6 @@ describe('EventsService', () => {
       expect(after.body.eventTheme.tokens).toEqual(before.body.eventTheme.tokens);
     });
 
-    it('should reject an invalid client kit assignment without changing the event or public theme', async () => {
-      // Arrange
-      const event = await eventFactory.create({ key: 'update-invalid-theme-kit' });
-      const brandKit = await brandKitFactory.create({
-        overrides: { tokens: { primary: '#ffffff' } },
-      });
-      const before = await eventThemeService.getPublicThemeByEventToken(event.token);
-
-      // Act
-      const update = service.update(event.id, { brandKitId: brandKit.id });
-
-      // Assert
-      await expect(update).rejects.toBeInstanceOf(UnprocessableEntityException);
-      const persisted = await TestDataSource.getRepository(Event).findOneByOrFail({ id: event.id });
-      const after = await eventThemeService.getPublicThemeByEventToken(event.token);
-      expect(persisted.brandKitId).toBeNull();
-      expect(after.body.eventTheme.tokens).toEqual(before.body.eventTheme.tokens);
-    });
-
     it('should update venue and return updated response', async () => {
       const event = await eventFactory.create({ key: 'update-name-001' });
 
@@ -542,20 +485,6 @@ describe('EventsService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('should update brandKitId when it references an existing brand kit', async () => {
-      // Arrange
-      const event = await eventFactory.create({ key: 'update-brand-kit-001' });
-      const brandKit = await brandKitFactory.create();
-
-      // Act
-      const result = await service.update(event.id, {
-        brandKitId: brandKit.id,
-      });
-
-      // Assert
-      expect(result.brandKitId).toBe(brandKit.id);
-    });
-
     it('should update eventThemeId when it references an existing preset', async () => {
       // Arrange
       const event = await eventFactory.create({ key: 'update-theme-001' });
@@ -594,18 +523,6 @@ describe('EventsService', () => {
         service.update(event.id, { eventThemeId: 999999 }),
       ).rejects.toEqual(
         new NotFoundException(EXCEPTION_RESPONSE.EVENT_THEME_NOT_FOUND),
-      );
-    });
-
-    it('should throw NotFoundException when brandKitId does not reference an existing brand kit', async () => {
-      // Arrange
-      const event = await eventFactory.create({ key: 'update-brand-kit-002' });
-
-      // Act & Assert
-      await expect(
-        service.update(event.id, { brandKitId: 999999 }),
-      ).rejects.toEqual(
-        new NotFoundException(EXCEPTION_RESPONSE.BRAND_KIT_NOT_FOUND),
       );
     });
 

@@ -1,7 +1,6 @@
 /**
  * WCAG relative-luminance contrast ratio between two colors, and the hex
- * parsing it needs. Pure, no IO — see `validate-theme-overrides.ts` (T7,
- * odd/tasks/theme-brand-kits.md) for where the minimum ratio is enforced.
+ * parsing it needs. Pure, no IO — see `validate-theme-overrides.ts` (T7) for where the minimum ratio is enforced.
  */
 
 const HEX_COLOR_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;

@@ -145,13 +145,8 @@ export class EventsController {
     description: 'Resolved theme preview',
     type: PreviewThemeResponseDto,
   })
-  @ApiBadRequestResponse({
-    description:
-      'Invalid request body, or both brandKitId and brandKit were sent',
-  })
-  @ApiNotFoundResponse({
-    description: 'Unknown eventThemeId or brandKitId',
-  })
+  @ApiBadRequestResponse({ description: 'Invalid request body' })
+  @ApiNotFoundResponse({ description: 'Unknown eventThemeId' })
   previewEventTheme(
     @Body(new ValidationPipe({ transform: true, whitelist: true }))
     dto: PreviewThemeDto,

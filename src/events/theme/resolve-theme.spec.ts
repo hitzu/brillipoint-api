@@ -43,11 +43,11 @@ describe('resolveTheme', () => {
   it('lets a later layer win over an earlier layer for the same token', () => {
     // Arrange
     const preset: ThemeOverrides = { tokens: { primary: '#111111' } };
-    const brandKit: ThemeOverrides = { tokens: { primary: '#222222' } };
+    const middleLayer: ThemeOverrides = { tokens: { primary: '#222222' } };
     const eventOverrides: ThemeOverrides = { tokens: { primary: '#333333' } };
 
     // Act
-    const resolved = resolveTheme(preset, brandKit, eventOverrides);
+    const resolved = resolveTheme(preset, middleLayer, eventOverrides);
 
     // Assert
     expect(resolved.tokens.primary).toBe('#333333');
@@ -126,40 +126,37 @@ describe('resolveTheme', () => {
 
   it('replaces the whole socialCta block atomically rather than deep-merging it', () => {
     // Arrange
-    const brandKit: ThemeOverrides = {
+    const defaultLayer: ThemeOverrides = {
       socialCta: {
-        brandKitKey: 'brillipoint',
         headline: { key: 'socialCta.default.headline' },
         socials: { instagram: '@brillipoint' },
       },
     };
     const eventOverrides: ThemeOverrides = {
       socialCta: {
-        brandKitKey: 'custom',
         headline: { text: { es: 'Hola', en: 'Hi' } },
       },
     };
 
     // Act
-    const resolved = resolveTheme(brandKit, eventOverrides);
+    const resolved = resolveTheme(defaultLayer, eventOverrides);
 
-    // Assert: the event's socialCta fully replaces the brand kit's,
+    // Assert: the event's socialCta fully replaces the default layer's,
     // it does not keep `socials` from the earlier layer.
     expect(resolved.socialCta).toEqual({
-      brandKitKey: 'custom',
       headline: { text: { es: 'Hola', en: 'Hi' } },
     });
   });
 
   it('sets socialCta to null when a layer explicitly removes it', () => {
     // Arrange
-    const brandKit: ThemeOverrides = {
-      socialCta: { brandKitKey: 'brillipoint' },
+    const defaultLayer: ThemeOverrides = {
+      socialCta: { socials: { instagram: '@brillipoint' } },
     };
     const eventOverrides: ThemeOverrides = { socialCta: null };
 
     // Act
-    const resolved = resolveTheme(brandKit, eventOverrides);
+    const resolved = resolveTheme(defaultLayer, eventOverrides);
 
     // Assert
     expect(resolved.socialCta).toBeNull();
@@ -251,12 +248,12 @@ describe('resolveTheme', () => {
         },
       },
     };
-    const brandKit: ThemeOverrides = {
+    const middleLayer: ThemeOverrides = {
       decorations: { confetti: { colors: ['#e11d48', '#ffffff'] } },
     };
 
     // Act
-    const resolved = resolveTheme(preset, brandKit);
+    const resolved = resolveTheme(preset, middleLayer);
 
     // Assert
     expect(resolved.decorations.confetti).toEqual({
@@ -345,11 +342,11 @@ describe('resolveTheme', () => {
 
     it('inherits the rewardPromo block from an earlier layer when a later layer omits it', () => {
       // Arrange
-      const brandKit: ThemeOverrides = { rewardPromo: brillipointPromo };
+      const defaultLayer: ThemeOverrides = { rewardPromo: brillipointPromo };
       const eventOverrides: ThemeOverrides = { tokens: { primary: '#ec4899' } };
 
       // Act
-      const resolved = resolveTheme(brandKit, eventOverrides);
+      const resolved = resolveTheme(defaultLayer, eventOverrides);
 
       // Assert
       expect(resolved.rewardPromo).toEqual(brillipointPromo);
@@ -357,11 +354,11 @@ describe('resolveTheme', () => {
 
     it('removes the rewardPromo block when a later layer sets it to null', () => {
       // Arrange
-      const brandKit: ThemeOverrides = { rewardPromo: brillipointPromo };
+      const defaultLayer: ThemeOverrides = { rewardPromo: brillipointPromo };
       const eventOverrides: ThemeOverrides = { rewardPromo: null };
 
       // Act
-      const resolved = resolveTheme(brandKit, eventOverrides);
+      const resolved = resolveTheme(defaultLayer, eventOverrides);
 
       // Assert
       expect(resolved.rewardPromo).toBeNull();
@@ -369,13 +366,13 @@ describe('resolveTheme', () => {
 
     it('replaces the whole rewardPromo block atomically rather than deep-merging it', () => {
       // Arrange
-      const brandKit: ThemeOverrides = { rewardPromo: brillipointPromo };
+      const defaultLayer: ThemeOverrides = { rewardPromo: brillipointPromo };
       const eventOverrides: ThemeOverrides = {
         rewardPromo: { handle: '@otra.marca' },
       };
 
       // Act
-      const resolved = resolveTheme(brandKit, eventOverrides);
+      const resolved = resolveTheme(defaultLayer, eventOverrides);
 
       // Assert: title/disclaimer from the earlier layer are not kept.
       expect(resolved.rewardPromo).toEqual({ handle: '@otra.marca' });

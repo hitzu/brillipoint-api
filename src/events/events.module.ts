@@ -16,7 +16,6 @@ import { EventAnalyticsController } from './analytics/event-analytics.controller
 import { EventAnalyticsService } from './analytics/event-analytics.service';
 import { EventsV2Controller } from './v2/events-v2.controller';
 import { Booking } from '../bookings/entities/booking.entity';
-import { BrandKitsModule } from '../brand-kits/brand-kits.module';
 import { Contract } from '../contracts/entities/contract.entity';
 
 @Module({
@@ -31,7 +30,6 @@ import { Contract } from '../contracts/entities/contract.entity';
       Booking,
       Contract,
     ]),
-    BrandKitsModule,
   ],
   controllers: [EventsController, EventsV2Controller, EventAnalyticsController],
   providers: [

@@ -108,18 +108,12 @@ class SocialCtaSocialsDto {
 
 /**
  * Resolved whole-block socialCta (T6): a single fallback block (event
- * override, else client kit, else business kit, else the Brillipoint
- * default kit), never `null` mixed with fields from another level.
+ * override, else the code-owned Brillipoint default), never `null` mixed
+ * with fields from another level.
  * `primaryAction.channel` is never repeated in `socials`.
  */
 @ApiExtraModels(SocialCtaWhatsappActionDto, SocialCtaLinkActionDto)
 class SocialCtaDto implements SocialCta {
-  @ApiPropertyOptional({
-    example: 'brillipoint',
-    description: 'Key of the brand kit that supplied this block, if any.',
-  })
-  brandKitKey?: string;
-
   @ApiPropertyOptional({ type: ThemeTextDto })
   headline?: ThemeText;
 
@@ -144,7 +138,7 @@ class SocialCtaDto implements SocialCta {
 
 /**
  * Resolved reward promo block: a plain layered block (no fallback chain),
- * so it is `null` whenever the winning kit or an override hides it.
+ * so it is `null` whenever an override hides it.
  */
 class RewardPromoDto implements RewardPromo {
   @ApiProperty({
@@ -174,13 +168,6 @@ class ThemeTemplateParamsDto implements ThemeTemplateParams {
       'Trimmed event.honoreesNames; omitted when the event has none.',
   })
   honoreesName?: string;
-
-  @ApiPropertyOptional({
-    example: 'Brillipoint',
-    description:
-      'Name of the brand kit that supplied the resolved socialCta block; omitted when none did (e.g. an event-level override supplied it, or nothing was usable).',
-  })
-  brandName?: string;
 }
 
 export class EventThemeTokensDto {
@@ -306,14 +293,14 @@ export class PublicEventThemeDto {
   @ApiProperty({
     example: '2026-09-27:2026-06-21T10:00:00.000Z',
     description:
-      'SYSTEM_DEFAULT_THEME_VERSION combined with the max updatedAt ISO timestamp among the DB layers applied (preset, brand kit, event overrides).',
+      'SYSTEM_DEFAULT_THEME_VERSION combined with the max updatedAt ISO timestamp among the DB layers applied (preset, event overrides).',
   })
   version!: string;
 
   @ApiProperty({
     type: EventThemeTokensDto,
     description:
-      'Complete resolved tokens: SYSTEM_DEFAULT_THEME merged with preset, brand kit and event overrides. Always fully populated.',
+      'Complete resolved tokens: SYSTEM_DEFAULT_THEME merged with the Brillipoint default, preset and event overrides. Always fully populated.',
   })
   tokens!: EventThemeTokensDto;
 
@@ -336,7 +323,7 @@ export class PublicEventThemeDto {
     type: SocialCtaDto,
     nullable: true,
     description:
-      'Resolved social CTA block (T6 whole-block fallback: event override, else client kit, else business kit, else the Brillipoint default kit). The block cannot be hidden: when no kit row is usable it falls back to the hardcoded Brillipoint block, so it is always present.',
+      'Resolved social CTA block (T6 whole-block fallback: event override, else the code-owned Brillipoint default). The block cannot be hidden: when the event override is not usable it falls back to the Brillipoint block, so it is always present.',
   })
   socialCta?: SocialCta | null;
 
@@ -344,7 +331,7 @@ export class PublicEventThemeDto {
     type: RewardPromoDto,
     nullable: true,
     description:
-      'Resolved reward promo block (plain layered merge, no fallback chain): only the Brillipoint default kit carries one, so it is null whenever a client or business kit wins the visual layer, or when an override sets it to null.',
+      'Resolved reward promo block (plain layered merge, no fallback chain): the code-owned Brillipoint default carries one, an event override replaces it, and an override set to null hides it.',
   })
   rewardPromo?: RewardPromo | null;
 

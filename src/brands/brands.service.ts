@@ -19,7 +19,7 @@ export class BrandsService {
 
   async create(createBrandDto: CreateBrandDto): Promise<BrandDto> {
     try {
-      this.logger.log({ brandName: createBrandDto.name }, 'Creating brand');
+      this.logger.log({ name: createBrandDto.name }, 'Creating brand');
       const brand = this.brandsRepository.create(createBrandDto);
       const savedBrand = await this.brandsRepository.save(brand);
       return plainToInstance(BrandDto, savedBrand, {

@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   ConflictException,
   NotFoundException,
   UnprocessableEntityException,
@@ -8,16 +7,6 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 
 import { AppDataSource as TestDataSource } from '../config/database/data-source';
-import { BrandKit } from '../brand-kits/entities/brand-kit.entity';
-import { BrandKitsService } from '../brand-kits/brand-kits.service';
-import {
-  BRILLIPOINT_BRAND_KIT_KEY,
-  BRILLIPOINT_BRAND_KIT_OVERRIDES,
-} from '../brand-kits/brillipoint-kit.seed';
-import { BrandKitFactory } from '../../test/factories/brand-kits/brand-kit.factory';
-import { BrandFactory } from '../../test/factories/brands/brands.factories';
-import { ContractFactory } from '../../test/factories/contracts/contract.factory';
-import { Contract } from '../contracts/entities/contract.entity';
 import { EventFactory } from '../../test/factories/events/event.factory';
 import { EventThemeFactory } from '../../test/factories/events/event-theme.factory';
 
@@ -26,6 +15,7 @@ import { UpdateEventThemeDto } from './dto/event-theme/update-event-theme.dto';
 import { EventTheme } from './entities/event-themes.entity';
 import { Event } from './entities/event.entity';
 import { EventThemeService } from './event-theme.service';
+import { BRILLIPOINT_DEFAULT_OVERRIDES } from './theme/brillipoint-default';
 import { SYSTEM_DEFAULT_THEME_VERSION } from './theme/system-default.theme';
 import type { ThemeOverrides } from './theme/theme.types';
 
@@ -44,7 +34,7 @@ const amorEternoTokens = {
 const loggerMock = { setContext: jest.fn(), error: jest.fn() };
 
 async function setUpdatedAt(
-  table: 'event_themes' | 'brand_kits' | 'events',
+  table: 'event_themes' | 'events',
   id: number,
   date: Date,
 ): Promise<void> {
@@ -58,30 +48,18 @@ describe('EventThemeService', () => {
   let service: EventThemeService;
   let eventThemeFactory: EventThemeFactory;
   let eventFactory: EventFactory;
-  let brandKitFactory: BrandKitFactory;
-  let brandFactory: BrandFactory;
-  let contractFactory: ContractFactory;
 
   beforeEach(() => {
     const eventThemeRepository = TestDataSource.getRepository(EventTheme);
     const eventRepository = TestDataSource.getRepository(Event);
-    const brandKitsService = new BrandKitsService(
-      TestDataSource.getRepository(BrandKit),
-    );
-
     service = new EventThemeService(
       eventThemeRepository,
       eventRepository,
-      TestDataSource.getRepository(Contract),
-      brandKitsService,
       loggerMock as any,
     );
 
     eventThemeFactory = new EventThemeFactory(TestDataSource);
     eventFactory = new EventFactory(TestDataSource);
-    brandKitFactory = new BrandKitFactory(TestDataSource);
-    brandFactory = new BrandFactory(TestDataSource);
-    contractFactory = new ContractFactory(TestDataSource);
   });
 
   // ─── images DTO validation (no DB — pure class-validator) ────────────────
@@ -511,7 +489,7 @@ describe('EventThemeService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('resolves system default tokens when the event has no theme and no brand kit resolves at all', async () => {
+    it('resolves system default tokens when the event has no theme', async () => {
       // Arrange
       const event = await eventFactory.create();
 
@@ -526,17 +504,13 @@ describe('EventThemeService', () => {
       });
     });
 
-    it('layers preset, client kit and event overrides in order (later wins)', async () => {
+    it('layers preset and event overrides in order (later wins)', async () => {
       // Arrange
       const preset = await eventThemeFactory.create({
         tokens: { primary: '#111111', secondary: '#222222' },
       });
-      const clientKit = await brandKitFactory.create({
-        overrides: { tokens: { primary: '#333333' } },
-      });
       const event = await eventFactory.create({
         eventThemeId: preset.id,
-        brandKitId: clientKit.id,
         themeOverrides: { tokens: { primary: '#444444' } },
       });
 
@@ -548,66 +522,12 @@ describe('EventThemeService', () => {
       expect(result.body.eventTheme.tokens.secondary).toBe('#222222');
     });
 
-    it('falls back to the business brand kit via the contract brand when the event has no client kit', async () => {
-      // Arrange
-      const businessKit = await brandKitFactory.create({
-        overrides: { tokens: { primary: '#555555' } },
-      });
-      const brand = await brandFactory.create({ brandKitId: businessKit.id });
-      const contract = await contractFactory.create({ brandId: brand.id });
-      const event = await eventFactory.create({ contractId: contract.id });
-
-      // Act
-      const result = await service.getPublicThemeByEventToken(event.token);
-
-      // Assert
-      expect(result.body.eventTheme.tokens.primary).toBe('#555555');
-    });
-
-    it('falls back to the Brillipoint default kit when neither client nor business kit resolve', async () => {
-      // Arrange
-      await brandKitFactory.create({
-        key: BRILLIPOINT_BRAND_KIT_KEY,
-        overrides: { tokens: { primary: '#666666' } },
-      });
-      const event = await eventFactory.create();
-
-      // Act
-      const result = await service.getPublicThemeByEventToken(event.token);
-
-      // Assert
-      expect(result.body.eventTheme.tokens.primary).toBe('#666666');
-    });
-
-    it('treats a soft-deleted client kit as absent and falls back to the next layer', async () => {
-      // Arrange
-      const deletedKit = await brandKitFactory.create({
-        overrides: { tokens: { primary: '#777777' } },
-      });
-      await TestDataSource.getRepository(BrandKit).softDelete(deletedKit.id);
-      const businessKit = await brandKitFactory.create({
-        overrides: { tokens: { primary: '#666666' } },
-      });
-      const brand = await brandFactory.create({ brandKitId: businessKit.id });
-      const contract = await contractFactory.create({ brandId: brand.id });
-      const event = await eventFactory.create({
-        contractId: contract.id,
-        brandKitId: deletedKit.id,
-      });
-
-      // Act
-      const result = await service.getPublicThemeByEventToken(event.token);
-
-      // Assert
-      expect(result.body.eventTheme.tokens.primary).toBe('#666666');
-    });
-
     it('rejects a merged invalid theme instead of publishing it', async () => {
       // Arrange
-      const kit = await brandKitFactory.create({
-        overrides: { tokens: { primary: '#fefefe' } },
+      const preset = await eventThemeFactory.create({
+        tokens: { primary: '#fefefe' },
       });
-      const event = await eventFactory.create({ brandKitId: kit.id });
+      const event = await eventFactory.create({ eventThemeId: preset.id });
 
       // Act & Assert
       await expect(
@@ -618,20 +538,11 @@ describe('EventThemeService', () => {
     it('combines the system default version with the max updatedAt among applied layers', async () => {
       // Arrange
       const preset = await eventThemeFactory.create();
-      const kit = await brandKitFactory.create();
-      const event = await eventFactory.create({
-        eventThemeId: preset.id,
-        brandKitId: kit.id,
-      });
+      const event = await eventFactory.create({ eventThemeId: preset.id });
 
       await setUpdatedAt(
         'event_themes',
         preset.id,
-        new Date('2020-01-01T00:00:00.000Z'),
-      );
-      await setUpdatedAt(
-        'brand_kits',
-        kit.id,
         new Date('2025-06-01T00:00:00.000Z'),
       );
       await setUpdatedAt(
@@ -675,21 +586,9 @@ describe('EventThemeService', () => {
 
     // ─── T6: socialCta whole-block fallback ─────────────────────────────────
 
-    it('uses the event override socialCta block when it is usable, over any kit', async () => {
+    it('uses the event override socialCta block when it is usable, over the Brillipoint default', async () => {
       // Arrange
-      const clientKit = await brandKitFactory.create({
-        overrides: {
-          socialCta: {
-            primaryAction: {
-              channel: 'whatsapp',
-              phone: '5210000000001',
-              label: { text: { es: 'Kit' } },
-            },
-          },
-        },
-      });
       const event = await eventFactory.create({
-        brandKitId: clientKit.id,
         themeOverrides: {
           socialCta: {
             primaryAction: {
@@ -705,26 +604,18 @@ describe('EventThemeService', () => {
       const result = await service.getPublicThemeByEventToken(event.token);
 
       // Assert
-      expect(result.body.eventTheme.socialCta?.primaryAction).toMatchObject({
-        phone: '5210000000002',
+      expect(result.body.eventTheme.socialCta).toEqual({
+        primaryAction: {
+          channel: 'whatsapp',
+          phone: '5210000000002',
+          label: { text: { es: 'Override' } },
+        },
       });
     });
 
-    it('ignores a legacy null socialCta event override and falls through to the kit', async () => {
+    it('ignores a legacy null socialCta event override and falls back to the Brillipoint default', async () => {
       // Arrange
-      const clientKit = await brandKitFactory.create({
-        overrides: {
-          socialCta: {
-            primaryAction: {
-              channel: 'whatsapp',
-              phone: '5210000000003',
-              label: { text: { es: 'Kit' } },
-            },
-          },
-        },
-      });
       const event = await eventFactory.create({
-        brandKitId: clientKit.id,
         themeOverrides: { socialCta: null },
       });
 
@@ -732,127 +623,51 @@ describe('EventThemeService', () => {
       const result = await service.getPublicThemeByEventToken(event.token);
 
       // Assert
-      expect(result.body.eventTheme.socialCta?.primaryAction).toMatchObject({
-        phone: '5210000000003',
-      });
+      expect(result.body.eventTheme.socialCta?.headline).toEqual(
+        BRILLIPOINT_DEFAULT_OVERRIDES.socialCta?.headline,
+      );
     });
 
-    it('treats a null socialCta on the client kit as no block and falls through to the business kit', async () => {
+    it('skips an event socialCta block with no primaryAction and no non-empty social', async () => {
       // Arrange
-      const clientKit = await brandKitFactory.create({
-        overrides: { socialCta: null },
-      });
-      const businessKit = await brandKitFactory.create({
-        overrides: {
-          socialCta: {
-            primaryAction: {
-              channel: 'whatsapp',
-              phone: '5210000000004',
-              label: { text: { es: 'Business' } },
-            },
-          },
-        },
-      });
-      const brand = await brandFactory.create({ brandKitId: businessKit.id });
-      const contract = await contractFactory.create({ brandId: brand.id });
       const event = await eventFactory.create({
-        contractId: contract.id,
-        brandKitId: clientKit.id,
+        themeOverrides: { socialCta: { socials: { instagram: '' } } },
       });
 
       // Act
       const result = await service.getPublicThemeByEventToken(event.token);
 
       // Assert
-      expect(result.body.eventTheme.socialCta?.primaryAction).toMatchObject({
-        phone: '5210000000004',
-      });
-      expect(result.body.eventTheme.socialCta?.brandKitKey).toBe(
-        businessKit.key,
+      expect(result.body.eventTheme.socialCta?.headline).toEqual(
+        BRILLIPOINT_DEFAULT_OVERRIDES.socialCta?.headline,
       );
     });
 
-    it('skips a client kit socialCta block with no primaryAction and no non-empty social', async () => {
-      // Arrange
-      const clientKit = await brandKitFactory.create({
-        overrides: { socialCta: { socials: { instagram: '' } } },
-      });
-      const businessKit = await brandKitFactory.create({
-        overrides: {
-          socialCta: {
-            primaryAction: {
-              channel: 'whatsapp',
-              phone: '5210000000005',
-              label: { text: { es: 'Business' } },
-            },
-          },
+    it('resolves the exact Brillipoint default CTA when the event sets no socialCta', async () => {
+      // Arrange — with honoreesName present, the message fallback is dropped
+      const event = await eventFactory.create({ honoreesNames: 'Ana' });
+      const defaultCta = BRILLIPOINT_DEFAULT_OVERRIDES.socialCta!;
+      const defaultAction = defaultCta.primaryAction as {
+        message: { text: unknown };
+      };
+
+      // Act
+      const result = await service.getPublicThemeByEventToken(event.token);
+
+      // Assert
+      expect(result.body.eventTheme.socialCta).toEqual({
+        ...defaultCta,
+        primaryAction: {
+          ...defaultCta.primaryAction,
+          message: { text: defaultAction.message.text },
         },
-      });
-      const brand = await brandFactory.create({ brandKitId: businessKit.id });
-      const contract = await contractFactory.create({ brandId: brand.id });
-      const event = await eventFactory.create({
-        contractId: contract.id,
-        brandKitId: clientKit.id,
-      });
-
-      // Act
-      const result = await service.getPublicThemeByEventToken(event.token);
-
-      // Assert
-      expect(result.body.eventTheme.socialCta?.primaryAction).toMatchObject({
-        phone: '5210000000005',
-      });
-    });
-
-    it('falls back to the Brillipoint default kit socialCta when neither client nor business kit has a usable block', async () => {
-      // Arrange
-      await brandKitFactory.create({
-        key: BRILLIPOINT_BRAND_KIT_KEY,
-        overrides: {
-          socialCta: {
-            primaryAction: {
-              channel: 'whatsapp',
-              phone: '5210000000006',
-              label: { text: { es: 'Brillipoint' } },
-            },
-          },
-        },
-      });
-      const event = await eventFactory.create();
-
-      // Act
-      const result = await service.getPublicThemeByEventToken(event.token);
-
-      // Assert
-      expect(result.body.eventTheme.socialCta?.primaryAction).toMatchObject({
-        phone: '5210000000006',
-      });
-      expect(result.body.eventTheme.socialCta?.brandKitKey).toBe(
-        BRILLIPOINT_BRAND_KIT_KEY,
-      );
-    });
-
-    it('falls back to the hardcoded Brillipoint CTA when no kit, not even the Brillipoint row, is usable', async () => {
-      // Arrange — no brand kit rows at all
-      const event = await eventFactory.create();
-
-      // Act
-      const result = await service.getPublicThemeByEventToken(event.token);
-
-      // Assert
-      expect(result.body.eventTheme.socialCta?.brandKitKey).toBe(
-        BRILLIPOINT_BRAND_KIT_KEY,
-      );
-      expect(result.body.eventTheme.socialCta?.primaryAction).toMatchObject({
-        channel: 'whatsapp',
-        phone: '5212215775211',
       });
     });
 
     it('removes the primary channel entry from socials in the resolved socialCta', async () => {
       // Arrange
-      const clientKit = await brandKitFactory.create({
-        overrides: {
+      const event = await eventFactory.create({
+        themeOverrides: {
           socialCta: {
             primaryAction: {
               channel: 'instagram',
@@ -866,7 +681,6 @@ describe('EventThemeService', () => {
           },
         },
       });
-      const event = await eventFactory.create({ brandKitId: clientKit.id });
 
       // Act
       const result = await service.getPublicThemeByEventToken(event.token);
@@ -903,53 +717,11 @@ describe('EventThemeService', () => {
       expect(result.body.eventTheme.params?.honoreesName).toBeUndefined();
     });
 
-    it('includes brandName as the name of the kit that supplied socialCta', async () => {
-      // Arrange
-      const clientKit = await brandKitFactory.create({
-        overrides: {
-          socialCta: {
-            primaryAction: {
-              channel: 'whatsapp',
-              phone: '5210000000007',
-              label: { text: { es: 'Kit' } },
-            },
-          },
-        },
-      });
-      const event = await eventFactory.create({ brandKitId: clientKit.id });
-
-      // Act
-      const result = await service.getPublicThemeByEventToken(event.token);
-
-      // Assert
-      expect(result.body.eventTheme.params?.brandName).toBe(clientKit.name);
-    });
-
-    it('omits brandName when the event override itself supplied socialCta', async () => {
-      // Arrange
-      const event = await eventFactory.create({
-        themeOverrides: {
-          socialCta: {
-            primaryAction: {
-              channel: 'whatsapp',
-              phone: '5210000000008',
-              label: { text: { es: 'Override' } },
-            },
-          },
-        },
-      });
-
-      // Act
-      const result = await service.getPublicThemeByEventToken(event.token);
-
-      // Assert
-      expect(result.body.eventTheme.params?.brandName).toBeUndefined();
-    });
-
     it('replaces a socialCta text with its fallback when the referenced param is missing, and never interpolates', async () => {
       // Arrange
-      const clientKit = await brandKitFactory.create({
-        overrides: {
+      const event = await eventFactory.create({
+        honoreesNames: null,
+        themeOverrides: {
           socialCta: {
             headline: {
               text: { es: 'Hola {{honoreesName}}' },
@@ -958,14 +730,10 @@ describe('EventThemeService', () => {
             primaryAction: {
               channel: 'whatsapp',
               phone: '5210000000009',
-              label: { text: { es: 'Kit' } },
+              label: { text: { es: 'Override' } },
             },
           },
         },
-      });
-      const event = await eventFactory.create({
-        brandKitId: clientKit.id,
-        honoreesNames: null,
       });
 
       // Act
@@ -979,8 +747,9 @@ describe('EventThemeService', () => {
 
     it('keeps the placeholder text untouched (never interpolated) when the referenced param is present', async () => {
       // Arrange
-      const clientKit = await brandKitFactory.create({
-        overrides: {
+      const event = await eventFactory.create({
+        honoreesNames: 'Ana',
+        themeOverrides: {
           socialCta: {
             headline: {
               text: { es: 'Hola {{honoreesName}}' },
@@ -989,14 +758,10 @@ describe('EventThemeService', () => {
             primaryAction: {
               channel: 'whatsapp',
               phone: '5210000000010',
-              label: { text: { es: 'Kit' } },
+              label: { text: { es: 'Override' } },
             },
           },
         },
-      });
-      const event = await eventFactory.create({
-        brandKitId: clientKit.id,
-        honoreesNames: 'Ana',
       });
 
       // Act
@@ -1028,48 +793,9 @@ describe('EventThemeService', () => {
       expect(result.body.eventTheme.images?.cover).toEqual(cover);
     });
 
-    // ─── rewardPromo: only the Brillipoint kit carries one ──────────────────
+    // ─── rewardPromo: the Brillipoint default, unless the event overrides it ──
 
-    it('returns the Brillipoint kit rewardPromo when the event has no client or business kit', async () => {
-      // Arrange
-      const rewardPromo = {
-        handle: '@brillipoint',
-        title: { text: { es: '¡Comparte y recibe un regalo!' } },
-      };
-      await brandKitFactory.create({
-        key: BRILLIPOINT_BRAND_KIT_KEY,
-        overrides: { rewardPromo },
-      });
-      const event = await eventFactory.create();
-
-      // Act
-      const result = await service.getPublicThemeByEventToken(event.token);
-
-      // Assert
-      expect(result.body.eventTheme.rewardPromo).toEqual(rewardPromo);
-    });
-
-    it('returns a null rewardPromo when a client kit wins the visual layer', async () => {
-      // Arrange
-      await brandKitFactory.create({
-        key: BRILLIPOINT_BRAND_KIT_KEY,
-        overrides: { rewardPromo: { handle: '@brillipoint' } },
-      });
-      const clientKit = await brandKitFactory.create({
-        overrides: { tokens: { primary: '#333333' } },
-      });
-      const event = await eventFactory.create({ brandKitId: clientKit.id });
-
-      // Act
-      const result = await service.getPublicThemeByEventToken(event.token);
-
-      // Assert
-      expect(result.body.eventTheme.rewardPromo).toBeNull();
-    });
-
-    // ─── rewardPromo safety net: the seed promo when the Brillipoint row lacks one ──
-
-    it('returns the seed rewardPromo when no kit row exists at all', async () => {
+    it('returns the Brillipoint default rewardPromo when the event sets none', async () => {
       // Arrange
       const event = await eventFactory.create();
 
@@ -1078,34 +804,15 @@ describe('EventThemeService', () => {
 
       // Assert
       expect(result.body.eventTheme.rewardPromo).toEqual(
-        BRILLIPOINT_BRAND_KIT_OVERRIDES.rewardPromo,
+        BRILLIPOINT_DEFAULT_OVERRIDES.rewardPromo,
       );
     });
 
-    it('returns the seed rewardPromo when the Brillipoint kit row has no rewardPromo', async () => {
+    it('returns a null rewardPromo when the event explicitly removes it', async () => {
       // Arrange
-      await brandKitFactory.create({
-        key: BRILLIPOINT_BRAND_KIT_KEY,
-        overrides: { tokens: { primary: '#333333' } },
+      const event = await eventFactory.create({
+        themeOverrides: { rewardPromo: null },
       });
-      const event = await eventFactory.create();
-
-      // Act
-      const result = await service.getPublicThemeByEventToken(event.token);
-
-      // Assert
-      expect(result.body.eventTheme.rewardPromo).toEqual(
-        BRILLIPOINT_BRAND_KIT_OVERRIDES.rewardPromo,
-      );
-    });
-
-    it('returns a null rewardPromo when the Brillipoint kit row explicitly removes it', async () => {
-      // Arrange
-      await brandKitFactory.create({
-        key: BRILLIPOINT_BRAND_KIT_KEY,
-        overrides: { rewardPromo: null },
-      });
-      const event = await eventFactory.create();
 
       // Act
       const result = await service.getPublicThemeByEventToken(event.token);
@@ -1114,21 +821,18 @@ describe('EventThemeService', () => {
       expect(result.body.eventTheme.rewardPromo).toBeNull();
     });
 
-    it('returns a null rewardPromo for a client kit even when no Brillipoint row exists', async () => {
+    it('returns empty params when the event has no honorees name and the Brillipoint default supplies socialCta', async () => {
       // Arrange
-      const clientKit = await brandKitFactory.create({
-        overrides: { tokens: { primary: '#333333' } },
-      });
-      const event = await eventFactory.create({ brandKitId: clientKit.id });
+      const event = await eventFactory.create({ honoreesNames: null });
 
       // Act
       const result = await service.getPublicThemeByEventToken(event.token);
 
       // Assert
-      expect(result.body.eventTheme.rewardPromo).toBeNull();
+      expect(result.body.eventTheme.params).toEqual({});
     });
 
-    it('returns the event override rewardPromo over the seed promo', async () => {
+    it('returns the event override rewardPromo over the Brillipoint default', async () => {
       // Arrange
       const rewardPromo = { handle: '@mi_fiesta' };
       const event = await eventFactory.create({
@@ -1161,92 +865,20 @@ describe('EventThemeService', () => {
       expect(result.eventTheme.tokens.onPrimary).toBe('#ffffff'); // inherited
     });
 
-    it('layers a preset and an existing brand kit (brandKitId), kit wins', async () => {
-      // Arrange
-      const preset = await eventThemeFactory.create({
-        tokens: { primary: '#16a34a', secondary: '#111111' },
-      });
-      const kit = await brandKitFactory.create({
-        overrides: { tokens: { primary: '#2563eb' } },
-      });
-
-      // Act
-      const result = await service.previewTheme({
-        eventThemeId: preset.id,
-        brandKitId: kit.id,
-      });
-
-      // Assert
-      expect(result.eventTheme.tokens.primary).toBe('#2563eb');
-      expect(result.eventTheme.tokens.secondary).toBe('#111111');
-    });
-
-    it('resolves an inline unsaved brandKit layer', async () => {
-      // Act
-      const result = await service.previewTheme({
-        brandKit: { tokens: { primary: '#f59e0b' } },
-      });
-
-      // Assert
-      expect(result.eventTheme.id).toBeNull();
-      expect(result.eventTheme.key).toBe('system-default');
-      expect(result.eventTheme.tokens.primary).toBe('#f59e0b');
-    });
-
-    it('exposes brandKitName as brandName when the inline brandKit supplies socialCta', async () => {
-      // Act
-      const result = await service.previewTheme({
-        brandKit: {
-          socialCta: { socials: { instagram: 'https://instagram.com/acme' } },
-        },
-        brandKitName: 'Acme',
-      });
-
-      // Assert
-      expect(result.eventTheme.params?.brandName).toBe('Acme');
-    });
-
-    it('rejects brandKitName without an inline brandKit with a 400', async () => {
-      // Arrange
-      const kit = await brandKitFactory.create();
-
-      // Act + Assert
-      await expect(
-        service.previewTheme({ brandKitId: kit.id, brandKitName: 'Acme' }),
-      ).rejects.toBeInstanceOf(BadRequestException);
-    });
-
-    it('layers themeOverrides last, on top of the preset and kit', async () => {
+    it('layers themeOverrides last, on top of the preset', async () => {
       // Arrange
       const preset = await eventThemeFactory.create({
         tokens: { primary: '#16a34a' },
       });
-      const kit = await brandKitFactory.create({
-        overrides: { tokens: { primary: '#2563eb' } },
-      });
 
       // Act
       const result = await service.previewTheme({
         eventThemeId: preset.id,
-        brandKitId: kit.id,
         themeOverrides: { tokens: { primary: '#dc2626' } },
       });
 
       // Assert
       expect(result.eventTheme.tokens.primary).toBe('#dc2626');
-    });
-
-    it('rejects brandKitId and brandKit sent together with a 400', async () => {
-      // Arrange
-      const kit = await brandKitFactory.create();
-
-      // Act + Assert
-      await expect(
-        service.previewTheme({
-          brandKitId: kit.id,
-          brandKit: { tokens: { primary: '#000000' } },
-        }),
-      ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('throws NotFoundException for an unknown eventThemeId', async () => {
@@ -1256,23 +888,15 @@ describe('EventThemeService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('throws NotFoundException for an unknown brandKitId', async () => {
-      // Act + Assert
-      await expect(
-        service.previewTheme({ brandKitId: 999999 }),
-      ).rejects.toBeInstanceOf(NotFoundException);
-    });
-
-    it('returns a resolved-contrast warning when a kit sets only primary against the inherited onPrimary', async () => {
+    it('returns a resolved-contrast warning when an override sets only primary against the inherited onPrimary', async () => {
       // Arrange — default onPrimary is #ffffff; #fefefe is near-white, so the
       // pair is illegible even though the per-layer validator never saw both
       // sides set by the SAME layer.
-      const kit = await brandKitFactory.create({
-        overrides: { tokens: { primary: '#fefefe' } },
-      });
 
       // Act
-      const result = await service.previewTheme({ brandKitId: kit.id });
+      const result = await service.previewTheme({
+        themeOverrides: { tokens: { primary: '#fefefe' } },
+      });
 
       // Assert
       expect(result.warnings.length).toBeGreaterThan(0);
@@ -1280,13 +904,10 @@ describe('EventThemeService', () => {
     });
 
     it('does not warn when the resolved primary/onPrimary contrast is fine', async () => {
-      // Arrange
-      const kit = await brandKitFactory.create({
-        overrides: { tokens: { primary: '#2563eb' } },
-      });
-
       // Act
-      const result = await service.previewTheme({ brandKitId: kit.id });
+      const result = await service.previewTheme({
+        themeOverrides: { tokens: { primary: '#2563eb' } },
+      });
 
       // Assert
       expect(result.warnings).toEqual([]);
@@ -1299,7 +920,7 @@ describe('EventThemeService', () => {
       } as unknown as ThemeOverrides;
 
       // Act
-      const result = await service.previewTheme({ brandKit: invalidOverrides });
+      const result = await service.previewTheme({ themeOverrides: invalidOverrides });
 
       // Assert
       expect(result.warnings).toContain(
@@ -1307,42 +928,25 @@ describe('EventThemeService', () => {
       );
     });
 
-    it('falls back to the Brillipoint kit for socialCta when no kit is given', async () => {
-      // Arrange
-      const brillipoint = await brandKitFactory.create({
-        key: BRILLIPOINT_BRAND_KIT_KEY,
-        overrides: {
-          socialCta: {
-            headline: { text: { es: 'Hola' } },
-            primaryAction: {
-              channel: 'whatsapp',
-              phone: '5210000000099',
-              label: { text: { es: 'Brillipoint' } },
-            },
-          },
-        },
-      });
-
+    it('falls back to the Brillipoint default socialCta when no override is given', async () => {
       // Act
       const result = await service.previewTheme({});
 
       // Assert
-      expect(result.eventTheme.socialCta?.brandKitKey).toBe(brillipoint.key);
+      expect(result.eventTheme.socialCta?.headline).toEqual(
+        BRILLIPOINT_DEFAULT_OVERRIDES.socialCta?.headline,
+      );
     });
 
-    it('persists nothing: the preset and kit rows are unchanged after preview', async () => {
+    it('persists nothing: the preset row is unchanged after preview', async () => {
       // Arrange
       const preset = await eventThemeFactory.create({
         tokens: { primary: '#16a34a' },
-      });
-      const kit = await brandKitFactory.create({
-        overrides: { tokens: { primary: '#2563eb' } },
       });
 
       // Act
       await service.previewTheme({
         eventThemeId: preset.id,
-        brandKitId: kit.id,
         themeOverrides: { tokens: { primary: '#dc2626' } },
       });
 
@@ -1350,12 +954,9 @@ describe('EventThemeService', () => {
       const presetAfter = await TestDataSource.getRepository(
         EventTheme,
       ).findOne({ where: { id: preset.id } });
-      const kitAfter = await TestDataSource.getRepository(BrandKit).findOne({
-        where: { id: kit.id },
-      });
       expect(presetAfter?.tokens).toEqual({ primary: '#16a34a' });
-      expect(kitAfter?.overrides).toEqual({ tokens: { primary: '#2563eb' } });
     });
+
   });
 
   // ─── isMatchingEtag ────────────────────────────────────────────────────────

@@ -8,9 +8,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
 import { AppDataSource as TestDataSource } from '../config/database/data-source';
-import { BrandKit } from '../brand-kits/entities/brand-kit.entity';
-import { BrandKitsService } from '../brand-kits/brand-kits.service';
-import { BrandKitFactory } from '../../test/factories/brand-kits/brand-kit.factory';
 import { Event } from '../events/entities/event.entity';
 import { EventTheme } from '../events/entities/event-themes.entity';
 import { EventFactory } from '../../test/factories/events/event.factory';
@@ -28,7 +25,6 @@ jest.mock('crypto', () => ({
 
 describe('ThemeAssetUploadsService', () => {
   let service: ThemeAssetUploadsService;
-  let brandKitFactory: BrandKitFactory;
   let eventFactory: EventFactory;
   let eventThemeFactory: EventThemeFactory;
 
@@ -68,7 +64,6 @@ describe('ThemeAssetUploadsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ThemeAssetUploadsService,
-        BrandKitsService,
         {
           provide: getRepositoryToken(EventTheme),
           useValue: TestDataSource.getRepository(EventTheme),
@@ -77,16 +72,11 @@ describe('ThemeAssetUploadsService', () => {
           provide: getRepositoryToken(Event),
           useValue: TestDataSource.getRepository(Event),
         },
-        {
-          provide: getRepositoryToken(BrandKit),
-          useValue: TestDataSource.getRepository(BrandKit),
-        },
         { provide: StorageService, useValue: storageService },
       ],
     }).compile();
 
     service = module.get<ThemeAssetUploadsService>(ThemeAssetUploadsService);
-    brandKitFactory = new BrandKitFactory(TestDataSource);
     eventFactory = new EventFactory(TestDataSource);
     eventThemeFactory = new EventThemeFactory(TestDataSource);
   });
@@ -117,25 +107,6 @@ describe('ThemeAssetUploadsService', () => {
       );
     });
 
-    it('builds the path under themes/brand-kits for a brand-kit owner', async () => {
-      // Arrange
-      const kit = await brandKitFactory.create();
-
-      // Act
-      const result = await service.createSignedUploadUrl({
-        ownerType: ThemeAssetOwnerType.BRAND_KIT,
-        ownerId: kit.id,
-        slot: ThemeAssetSlot.HERO,
-        fileName: 'hero.jpg',
-        mime: 'image/jpeg',
-      });
-
-      // Assert
-      expect(result.path).toBe(
-        `themes/brand-kits/${kit.id}/hero/uuid-123_hero.jpg`,
-      );
-    });
-
     it('builds the path under themes/events for an event owner', async () => {
       // Arrange
       const event = await eventFactory.create();
@@ -157,12 +128,12 @@ describe('ThemeAssetUploadsService', () => {
 
     it('returns bucket, signedUrl, token and publicUrl on success', async () => {
       // Arrange
-      const kit = await brandKitFactory.create();
+      const preset = await eventThemeFactory.create();
 
       // Act
       const result = await service.createSignedUploadUrl({
-        ownerType: ThemeAssetOwnerType.BRAND_KIT,
-        ownerId: kit.id,
+        ownerType: ThemeAssetOwnerType.PRESET,
+        ownerId: preset.id,
         slot: ThemeAssetSlot.LOGO,
         fileName: 'logo.png',
         mime: 'image/png',
@@ -171,21 +142,21 @@ describe('ThemeAssetUploadsService', () => {
       // Assert
       expect(result).toEqual({
         bucket,
-        path: `themes/brand-kits/${kit.id}/logo/uuid-123_logo.png`,
+        path: `themes/presets/${preset.id}/logo/uuid-123_logo.png`,
         signedUrl: 'https://signed-upload-url',
         token: 'upload-token',
-        publicUrl: `${baseUrl.replace(/\/$/, '')}/storage/v1/object/public/${bucket}/themes/brand-kits/${kit.id}/logo/uuid-123_logo.png`,
+        publicUrl: `${baseUrl.replace(/\/$/, '')}/storage/v1/object/public/${bucket}/themes/presets/${preset.id}/logo/uuid-123_logo.png`,
       });
     });
 
     it('sanitizes the file name before building the path', async () => {
       // Arrange
-      const kit = await brandKitFactory.create();
+      const preset = await eventThemeFactory.create();
 
       // Act
       const result = await service.createSignedUploadUrl({
-        ownerType: ThemeAssetOwnerType.BRAND_KIT,
-        ownerId: kit.id,
+        ownerType: ThemeAssetOwnerType.PRESET,
+        ownerId: preset.id,
         slot: ThemeAssetSlot.LOGO,
         fileName: '  ../evil/..\\path  .png ',
         mime: 'image/png',
@@ -193,7 +164,7 @@ describe('ThemeAssetUploadsService', () => {
 
       // Assert
       expect(result.path).toBe(
-        `themes/brand-kits/${kit.id}/logo/uuid-123_.._evil_.._path_.png`,
+        `themes/presets/${preset.id}/logo/uuid-123_.._evil_.._path_.png`,
       );
     });
 
@@ -206,21 +177,6 @@ describe('ThemeAssetUploadsService', () => {
       await expect(
         service.createSignedUploadUrl({
           ownerType: ThemeAssetOwnerType.PRESET,
-          ownerId: 999999,
-          slot: ThemeAssetSlot.LOGO,
-          fileName: 'logo.png',
-          mime: 'image/png',
-        }),
-      ).rejects.toBeInstanceOf(NotFoundException);
-    });
-
-    it('throws NotFoundException when the brand kit does not exist', async () => {
-      // Arrange — no kit created
-
-      // Act + Assert
-      await expect(
-        service.createSignedUploadUrl({
-          ownerType: ThemeAssetOwnerType.BRAND_KIT,
           ownerId: 999999,
           slot: ThemeAssetSlot.LOGO,
           fileName: 'logo.png',
@@ -244,34 +200,17 @@ describe('ThemeAssetUploadsService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('throws NotFoundException when the brand kit is soft-deleted', async () => {
-      // Arrange
-      const kit = await brandKitFactory.create();
-      await TestDataSource.getRepository(BrandKit).softDelete(kit.id);
-
-      // Act + Assert
-      await expect(
-        service.createSignedUploadUrl({
-          ownerType: ThemeAssetOwnerType.BRAND_KIT,
-          ownerId: kit.id,
-          slot: ThemeAssetSlot.LOGO,
-          fileName: 'logo.png',
-          mime: 'image/png',
-        }),
-      ).rejects.toBeInstanceOf(NotFoundException);
-    });
-
     // ─── mime whitelist ────────────────────────────────────────────────
 
     it('throws UnprocessableEntityException for a gif on any slot', async () => {
       // Arrange
-      const kit = await brandKitFactory.create();
+      const preset = await eventThemeFactory.create();
 
       // Act + Assert
       await expect(
         service.createSignedUploadUrl({
-          ownerType: ThemeAssetOwnerType.BRAND_KIT,
-          ownerId: kit.id,
+          ownerType: ThemeAssetOwnerType.PRESET,
+          ownerId: preset.id,
           slot: ThemeAssetSlot.LOGO,
           fileName: 'logo.gif',
           mime: 'image/gif',
@@ -281,13 +220,13 @@ describe('ThemeAssetUploadsService', () => {
 
     it('throws UnprocessableEntityException for svg on the cover slot', async () => {
       // Arrange
-      const kit = await brandKitFactory.create();
+      const preset = await eventThemeFactory.create();
 
       // Act + Assert
       await expect(
         service.createSignedUploadUrl({
-          ownerType: ThemeAssetOwnerType.BRAND_KIT,
-          ownerId: kit.id,
+          ownerType: ThemeAssetOwnerType.PRESET,
+          ownerId: preset.id,
           slot: ThemeAssetSlot.COVER,
           fileName: 'cover.svg',
           mime: 'image/svg+xml',
@@ -297,12 +236,12 @@ describe('ThemeAssetUploadsService', () => {
 
     it('accepts svg on the logo slot', async () => {
       // Arrange
-      const kit = await brandKitFactory.create();
+      const preset = await eventThemeFactory.create();
 
       // Act
       const result = await service.createSignedUploadUrl({
-        ownerType: ThemeAssetOwnerType.BRAND_KIT,
-        ownerId: kit.id,
+        ownerType: ThemeAssetOwnerType.PRESET,
+        ownerId: preset.id,
         slot: ThemeAssetSlot.LOGO,
         fileName: 'logo.svg',
         mime: 'image/svg+xml',
@@ -310,7 +249,7 @@ describe('ThemeAssetUploadsService', () => {
 
       // Assert
       expect(result.path).toBe(
-        `themes/brand-kits/${kit.id}/logo/uuid-123_logo.svg`,
+        `themes/presets/${preset.id}/logo/uuid-123_logo.svg`,
       );
     });
   });

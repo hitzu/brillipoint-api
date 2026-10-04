@@ -1,21 +1,4 @@
-import type {
-  SocialCta,
-  SocialCtaSocials,
-  ThemeOverrides,
-} from './theme.types';
-
-/** A brand kit candidate for the socialCta fallback chain (T6, decision R3/T6 spec). */
-export interface SocialCtaKitCandidate {
-  key: string;
-  name: string;
-  overrides: ThemeOverrides;
-}
-
-export interface SocialCtaResolution {
-  socialCta: SocialCta | null;
-  /** Name of the kit that supplied the block; absent when the event override supplied it, or nothing did. */
-  brandName?: string;
-}
+import type { SocialCta, SocialCtaSocials } from './theme.types';
 
 const SOCIAL_KEYS: readonly (keyof SocialCtaSocials)[] = [
   'whatsapp',
@@ -45,10 +28,7 @@ function isUsable(block: SocialCta | null | undefined): block is SocialCta {
  * Removes the primary channel's entry from `socials` (not repeated) and
  * drops empty-string/null socials, keeping the rest of the block untouched.
  */
-function cleanBlock(
-  block: SocialCta,
-  brandKitKey: string | undefined,
-): SocialCta {
+function cleanBlock(block: SocialCta): SocialCta {
   const cleaned: SocialCta = { ...block };
   const primaryChannel = block.primaryAction?.channel;
   const socials: Partial<SocialCtaSocials> = { ...(block.socials ?? {}) };
@@ -69,46 +49,30 @@ function cleanBlock(
     delete cleaned.socials;
   }
 
-  if (brandKitKey !== undefined) {
-    cleaned.brandKitKey = brandKitKey;
-  }
-
   return cleaned;
 }
 
 /**
- * Whole-block socialCta fallback (T6). Candidate blocks, in order:
- * event override -> client kit -> business kit -> Brillipoint default kit
- * (the caller supplies the ordered `kits` list).
+ * Whole-block socialCta fallback: the event override when usable, otherwise
+ * the default block (the code-owned Brillipoint CTA).
  *
- * - `undefined` at a level means "go to the next level".
- * - `null` at any level (event override or kit) means "no block", never
- *   "hide"; the chain continues. The block cannot be hidden so it always
- *   reaches the Brillipoint kit, our main acquisition point.
- * - A block is picked only if `isUsable`; the FIRST usable block is taken
- *   entirely (fields are never mixed across levels).
- * - Nothing usable anywhere resolves to `{ socialCta: null }`.
+ * - `undefined` or `null` on the event override means "no block", never
+ *   "hide": the CTA always reaches the default, our main acquisition point.
+ * - A block is picked only if `isUsable`, and taken entirely (fields are
+ *   never mixed between the override and the default).
+ * - Nothing usable resolves to `null`.
  */
 export function resolveSocialCta(
   eventOverride: SocialCta | null | undefined,
-  kits: Array<SocialCtaKitCandidate | null | undefined>,
-): SocialCtaResolution {
+  defaultBlock: SocialCta | null | undefined,
+): SocialCta | null {
   if (isUsable(eventOverride)) {
-    return { socialCta: cleanBlock(eventOverride, eventOverride.brandKitKey) };
+    return cleanBlock(eventOverride);
   }
 
-  for (const kit of kits) {
-    if (!kit) {
-      continue;
-    }
-
-    const block = kit.overrides.socialCta;
-    if (!isUsable(block)) {
-      continue;
-    }
-
-    return { socialCta: cleanBlock(block, kit.key), brandName: kit.name };
+  if (isUsable(defaultBlock)) {
+    return cleanBlock(defaultBlock);
   }
 
-  return { socialCta: null };
+  return null;
 }

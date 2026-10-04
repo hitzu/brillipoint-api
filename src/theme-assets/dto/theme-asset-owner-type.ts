@@ -1,7 +1,6 @@
 /** Which entity owns the theme image being uploaded — maps to a storage folder. */
 export enum ThemeAssetOwnerType {
   PRESET = 'preset',
-  BRAND_KIT = 'brand-kit',
   EVENT = 'event',
 }
 

@@ -3,7 +3,7 @@ import type { ResolvedTheme } from './theme.types';
 /**
  * Version tag for the system default theme. Bump it whenever
  * `SYSTEM_DEFAULT_THEME` changes so the frontend can detect drift against
- * its offline `system-default.json` fallback (see odd/tasks/theme-brand-kits.md, T7).
+ * its offline `system-default.json` fallback.
  */
 export const SYSTEM_DEFAULT_THEME_VERSION = '2026-10-02';
 
@@ -13,7 +13,7 @@ export const SYSTEM_DEFAULT_THEME_VERSION = '2026-10-02';
  * `satisfies ResolvedTheme` makes omitting a required token a compile-time
  * error. Values are intentionally neutral greys/near-black with no
  * Brillipoint branding; `socialCta` stays `null` (T6 decides fallbacks) and
- * so does `rewardPromo`: only a brand kit (today, Brillipoint's) shows one.
+ * so does `rewardPromo`: only the Brillipoint default layer shows one.
  */
 export const SYSTEM_DEFAULT_THEME = {
   tokens: {

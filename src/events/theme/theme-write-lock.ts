@@ -6,7 +6,7 @@ export const THEME_WRITE_LOCK_KEY = 1_947_326_501;
 /**
  * Run a public-theme-sensitive mutation in a transaction after taking the
  * shared PostgreSQL transaction-scoped lock. Keep this helper dependency-free
- * so event and brand-kit modules can coordinate without importing each other.
+ * so event and theme modules can coordinate without importing each other.
  */
 export function withThemeWriteLock<T>(
   manager: EntityManager,

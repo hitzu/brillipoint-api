@@ -8,7 +8,7 @@ import {
 
 /**
  * Drift guard for `system-default.json`, the committed offline fallback the
- * frontend bundles at build time (T7, odd/tasks/theme-brand-kits.md). The
+ * frontend bundles at build time (T7). The
  * file is generated, never hand-edited: `pnpm run theme:export-default`.
  */
 describe('system-default.json', () => {
@@ -38,7 +38,7 @@ describe('system-default.json', () => {
 });
 
 describe('SYSTEM_DEFAULT_THEME', () => {
-  it('carries no reward promo so only a kit can show one', () => {
+  it('carries no reward promo so only the Brillipoint default can show one', () => {
     // Arrange
     const theme = SYSTEM_DEFAULT_THEME;
 

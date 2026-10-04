@@ -129,16 +129,6 @@ export class EventResponseDto {
 
   @Expose()
   @ApiPropertyOptional({
-    type: Number,
-    description: 'Brand kit id (client theme kit)',
-    nullable: true,
-  })
-  @IsNumber()
-  @IsOptional()
-  brandKitId?: number | null;
-
-  @Expose()
-  @ApiPropertyOptional({
     type: Object,
     description: 'Per-event theme overrides',
     nullable: true,

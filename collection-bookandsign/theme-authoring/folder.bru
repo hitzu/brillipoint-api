@@ -18,35 +18,31 @@ docs {
   A resolved theme is always the merge of, in order:
 
     SystemDefault (code, `src/events/theme/system-default.theme.ts`)
+      -> Brillipoint default (code, `src/events/theme/brillipoint-default.ts`)
       -> preset (`event_themes`, picked via `eventThemeId`)
-      -> brand kit (`brand_kits`, picked via `brandKitId`)
       -> event overrides (`events.theme_overrides`)
 
-  SystemDefault is ALWAYS the base — an event with no preset and no brand
-  kit still renders a complete theme. Removing a preset or brand kit
-  assignment never breaks resolution; it just falls back further up the
-  chain.
+  SystemDefault is ALWAYS the base — an event with no preset still renders
+  a complete theme. Removing a preset assignment never breaks resolution;
+  it just falls back further up the chain.
 
-  ## Two flows
+  ## Flows
 
   - `party/`: a couple/individual picks a preset and layers per-event
-    overrides on top (cover image, confetti). No brand kit involved —
-    `socialCta` falls back to the Brillipoint kit automatically.
-  - `company/`: a business creates a `brand_kits` row (name, logo, brand
-    tokens, `socialCta`) once, then assigns it to any number of events with
-    `PATCH /events/:id { brandKitId }`. No preset is required — SystemDefault
-    is the base and the kit layers its tokens/images/socialCta on top.
+    overrides on top (cover image, confetti). `socialCta` falls back to the
+    Brillipoint default automatically.
+  - Company events are authored per event the same way: store the company
+    name in `honoreesNames` and set colors, images, `socialCta` and
+    `rewardPromo` in the event's `themeOverrides`. No preset is required.
 
   ## Rules that apply to every step below
 
-  - `PATCH` on overrides/tokens/images (brand kit `overrides`, preset
-    `tokens`/`images`, event `themeOverrides`) REPLACES the stored value
+  - `PATCH` on overrides/tokens/images (preset `tokens`/`images`, event
+    `themeOverrides`) REPLACES the stored value
     entirely — it is never deep-merged with what was there before. Omit a
     field to leave it untouched; send it to replace it whole.
-  - A brand kit's `key` is an immutable lowercase slug
-    (`^[a-z0-9]+(-[a-z0-9]+)*$`), set once at creation.
-  - Image flow: create the owner first (brand kit / preset / reference an
-    existing event) -> `POST /theme-assets/upload-url` -> `PUT` the file to
+  - Image flow: create the owner first (preset / reference an existing
+    event) -> `POST /theme-assets/upload-url` -> `PUT` the file to
     the returned `signedUrl` -> store `{ path, url: publicUrl }` in the
     matching `images.<slot>`. We host every theme image ourselves; a client-
     supplied external URL is never stored.
@@ -57,12 +53,12 @@ docs {
     not by this API.
   - `POST /events/themes/preview` is a dry run: `{ eventTheme, warnings }`.
     Nothing is persisted. `warnings` carries non-blocking contrast issues
-    computed on the RESOLVED tokens (e.g. a kit that sets `primary` against
-    an inherited `onPrimary`) — review them before saving, but they never
+    computed on the RESOLVED tokens (e.g. overrides that set `primary`
+    against an inherited `onPrimary`) — review them before saving, but they never
     block the preview itself.
-  - `socialCta` falls back to the Brillipoint default kit whenever no layer
-    in the chain supplies it — an event with neither a brand kit nor an
-    event-level `socialCta` override still gets a usable CTA.
+  - `socialCta` falls back to the Brillipoint default whenever the event
+    supplies no usable block — an event without an event-level `socialCta`
+    override still gets a usable CTA.
   - The public theme endpoint (`GET /events/{token}/theme`) is cached for
     5 minutes — changes made in this flow may take up to 5 minutes to show
     there even though `preview`/staff reads see them immediately.
@@ -72,5 +68,5 @@ docs {
   `PATCH /events/:id` accepts `eventThemeId` (preset id, 404
   `EVENT_THEME_NOT_FOUND` if unknown) or `null` to remove the preset and
   render on the SystemDefault base layer. `party/05` assigns the preset
-  picked in `party/01`; `company/07` clears it.
+  picked in `party/01`.
 }

@@ -22,9 +22,8 @@ docs {
     serviceStartsAt, serviceEndsAt, venueName, serviceLocationUrl,
     serviceTypeId, printTemplate, printTemplates
 
-  `decorativeIcon` was removed entirely (column dropped) in
-  `odd/tasks/theme-brand-kits.md` T4; it never existed in v2. v2 responses
-  include `brandKitId` / `themeOverrides` instead.
+  `decorativeIcon` was removed entirely (column dropped); it never existed
+  in v2. v2 responses include `themeOverrides` instead.
 
   v2 also has no `scheduleSource` field (removed once the event fallback
   was dropped — schedule is always sourced from the booking or absent).

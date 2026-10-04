@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { BrandKitsModule } from '../brand-kits/brand-kits.module';
 import { StorageModule } from '../common/storage/storage.module';
 import { EventTheme } from '../events/entities/event-themes.entity';
 import { Event } from '../events/entities/event.entity';
@@ -10,17 +9,11 @@ import { ThemeAssetsController } from './theme-assets.controller';
 
 /**
  * Small dedicated module (T4/theme-authoring): the upload-url endpoint
- * needs read access to presets (`event_themes`), brand kits and events —
- * three otherwise-unrelated owner types — so it lives on its own instead of
- * folding into `EventsModule` (which would pull brand-kits/events
- * dependencies the other way) or `BrandKitsModule`.
+ * needs read access to presets (`event_themes`) and events — two owner
+ * types — so it lives on its own instead of folding into `EventsModule`.
  */
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([EventTheme, Event]),
-    BrandKitsModule,
-    StorageModule,
-  ],
+  imports: [TypeOrmModule.forFeature([EventTheme, Event]), StorageModule],
   controllers: [ThemeAssetsController],
   providers: [ThemeAssetUploadsService],
 })

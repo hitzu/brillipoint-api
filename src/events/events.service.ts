@@ -13,7 +13,6 @@ import { EXCEPTION_RESPONSE } from '../config/errors/exception-response.config';
 import { isUniqueViolation } from '../config/errors/exceptions-handler';
 import { Booking } from '../bookings/entities/booking.entity';
 import { BOOKING_PURPOSE } from '../bookings/constants/booking_purpose.enum';
-import { BrandKit } from '../brand-kits/entities/brand-kit.entity';
 import { CreateEventDto } from './dto/create-event.dto';
 import { EventResponseDto } from './dto/event-response.dto';
 import { EventV2ResponseDto } from './dto/v2/event-v2-response.dto';
@@ -168,14 +167,6 @@ export class EventsService {
           throw new NotFoundException(EXCEPTION_RESPONSE.EVENT_THEME_NOT_FOUND);
         }
       }
-      if (dto.brandKitId != null) {
-        const brandKit = await manager
-          .getRepository(BrandKit)
-          .findOne({ where: { id: dto.brandKitId } });
-        if (!brandKit) {
-          throw new NotFoundException(EXCEPTION_RESPONSE.BRAND_KIT_NOT_FOUND);
-        }
-      }
       const serviceStartsAt = dto.serviceStartsAt ?? event.serviceStartsAt;
       const serviceEndsAt = dto.serviceEndsAt ?? event.serviceEndsAt;
       if (
@@ -190,7 +181,6 @@ export class EventsService {
 
       if (
         dto.eventThemeId !== undefined ||
-        dto.brandKitId !== undefined ||
         dto.themeOverrides !== undefined
       ) {
         await this.eventThemeService.validateEventThemeUpdate(
@@ -201,8 +191,6 @@ export class EventsService {
               dto.eventThemeId !== undefined
                 ? dto.eventThemeId
                 : event.eventThemeId,
-            brandKitId:
-              dto.brandKitId !== undefined ? dto.brandKitId : event.brandKitId,
             themeOverrides:
               dto.themeOverrides !== undefined
                 ? dto.themeOverrides
@@ -220,9 +208,7 @@ export class EventsService {
     };
 
     const changesTheme =
-      dto.eventThemeId !== undefined ||
-      dto.brandKitId !== undefined ||
-      dto.themeOverrides !== undefined;
+      dto.eventThemeId !== undefined || dto.themeOverrides !== undefined;
     return changesTheme
       ? withThemeWriteLock(this.eventRepository.manager, updateWithManager)
       : updateWithManager(this.eventRepository.manager);

@@ -2,9 +2,8 @@
  * Pure domain types for the layered theme system.
  *
  * Layers (merged at read time by `resolveTheme`):
- *   SystemDefault (code) -> event_themes preset -> brand_kits -> events.theme_overrides
- *
- * See odd/tasks/theme-brand-kits.md for the full design and decisions.
+ *   SystemDefault (code) -> Brillipoint default (code) -> event_themes preset
+ *   -> events.theme_overrides
  */
 
 /** The 9 tokens every resolved theme is guaranteed to have. */
@@ -124,8 +123,6 @@ export type ThemeText =
 export interface ThemeTemplateParams {
   /** Trimmed `event.honoreesNames`; omitted when empty. */
   honoreesName?: string;
-  /** Name of the brand kit that supplied the resolved socialCta block; omitted when none did. */
-  brandName?: string;
 }
 
 export type SocialCtaChannel =
@@ -174,7 +171,6 @@ export interface SocialCtaSocials {
  * Full resolution/fallback rules (T6) are out of scope here.
  */
 export interface SocialCta {
-  brandKitKey?: string;
   headline?: ThemeText;
   subtitle?: ThemeText;
   followText?: ThemeText;
@@ -186,7 +182,7 @@ export interface SocialCta {
  * Reward promo shown to guests (gift button + modal, share-confirm tag copy):
  * guests tag `handle` when sharing and get a reward. Merge treats this as
  * ATOMIC, like `socialCta`, but WITHOUT a fallback chain: `null` hides it.
- * Only the Brillipoint kit carries one today; the system default is `null`.
+ * Only the Brillipoint default layer carries one today; the system default is `null`.
  */
 export interface RewardPromo {
   /** Social handle guests must tag, e.g. `@brillipoint`. */
@@ -202,7 +198,7 @@ export type ThemeCopy = Record<string, ThemeText>;
 export type ThemeCopyOverrides = Record<string, ThemeText | null>;
 
 /**
- * Shared partial shape for presets, brand kits, and per-event overrides.
+ * Shared partial shape for presets and per-event overrides.
  * Every field is optional; `undefined` means inherit from the previous
  * layer, `null` means explicitly remove (where removal is meaningful).
  */

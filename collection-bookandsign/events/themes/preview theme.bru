@@ -17,7 +17,7 @@ headers {
 body:json {
   {
     "eventThemeId": 1,
-    "brandKit": {
+    "themeOverrides": {
       "tokens": {
         "primary": "#2563eb"
       }
@@ -32,14 +32,11 @@ settings {
 }
 
 docs {
-  Dry-run resolution: SystemDefault -> preset -> kit -> overrides. Nothing is
-  persisted.
-
-  `brandKitId` (an existing, saved kit) and `brandKit` (inline, unsaved) are
-  mutually exclusive — sending both is a 400.
+  Dry-run resolution: SystemDefault -> Brillipoint default -> preset ->
+  overrides. Nothing is persisted.
 
   Response shape: `{ eventTheme, warnings: string[] }`. `warnings` carries
-  non-blocking contrast issues found on the RESOLVED tokens (e.g. a kit that
-  only sets `primary` against an inherited `onPrimary`) — it never blocks the
+  non-blocking contrast issues found on the RESOLVED tokens (e.g. overrides that
+  only set `primary` against an inherited `onPrimary`) — it never blocks the
   preview.
 }

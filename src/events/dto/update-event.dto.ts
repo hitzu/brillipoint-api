@@ -134,16 +134,6 @@ export class UpdateEventDto {
   eventThemeId?: number | null;
 
   @ApiPropertyOptional({
-    type: Number,
-    description:
-      'Brand kit id (client theme kit). Must reference an existing brand kit.',
-    nullable: true,
-  })
-  @IsInt()
-  @IsOptional()
-  brandKitId?: number | null;
-
-  @ApiPropertyOptional({
     type: Object,
     description: 'Per-event theme overrides (partial ThemeOverrides shape).',
     nullable: true,

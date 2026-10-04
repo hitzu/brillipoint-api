@@ -1,36 +1,17 @@
-import type { ThemeOverrides } from '../events/theme/theme.types';
+import type { ThemeOverrides } from './theme.types';
 
 /**
- * Fixed key for the Brillipoint brand kit, the global socialCta fallback
- * (decision R3, odd/tasks/theme-brand-kits.md). Never linked to a brand
- * automatically — it is looked up by key, not by `brands.brand_kit_id`.
- */
-export const BRILLIPOINT_BRAND_KIT_KEY = 'brillipoint';
-
-export const BRILLIPOINT_BRAND_KIT_NAME = 'Brillipoint';
-
-/**
- * Seed payload for the Brillipoint kit's `overrides` column. Seeded by
- * migration (never by hand) so it exists identically in every environment.
- * Kept here, rather than only in the migration file, so a unit test can
- * assert its shape without running migrations (test DB uses `synchronize`)
- * and so the theme resolver can use it as an in-code safety net when the
- * row is missing (`BRILLIPOINT_SOCIAL_CTA_SAFETY_NET`, `toVisualKitLayer`).
+ * Code-owned Brillipoint default layer (T1):
+ * the first layer of every resolved event theme, under the preset
+ * (`eventThemeId`) and the event `themeOverrides`.
  *
- * History: the insert migrations originally written for this row
- * (`1790560306542`, plus `1790583200000` adding
- * `primaryAction.message.fallback`) were never committed — only the
- * `brand_kits` table migration `1790613866934` was — so environments built
- * from the repo had no `brillipoint` row. Migration `1790985211804`
- * (odd/tasks/reward-promo-theme-block.md, T2c) is now the source of truth
- * for the row: it inserts this payload when the row is missing and, on an
- * existing row, only adds a missing `rewardPromo`. Its payload is a frozen
- * literal; `brillipoint-kit.seed.spec.ts` asserts this constant still equals
- * it. Change this constant only together with a new migration for the delta.
+ * - `rewardPromo` follows plain layer semantics: an event override replaces
+ *   it, and an explicit `null` override hides it.
+ * - `socialCta` is the never-hide fallback block: any usable event override
+ *   wins whole, otherwise this block is shown.
  */
-export const BRILLIPOINT_BRAND_KIT_OVERRIDES: ThemeOverrides = {
+export const BRILLIPOINT_DEFAULT_OVERRIDES: ThemeOverrides = {
   socialCta: {
-    brandKitKey: BRILLIPOINT_BRAND_KIT_KEY,
     headline: {
       text: {
         es: '¿Y si las próximas fotos son las tuyas?',

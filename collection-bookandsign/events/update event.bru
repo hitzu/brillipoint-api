@@ -37,9 +37,8 @@ docs {
   change an event's schedule/venue, update its EVENT booking instead
   (`bookings` collection).
 
-  `decorativeIcon` was fully removed (column dropped, not just deprecated)
-  in `odd/tasks/theme-brand-kits.md` T4. Use `brandKitId` (must reference
-  an existing brand kit) and `themeOverrides` (shape-level validated
-  partial theme object) instead, e.g.:
-    { "brandKitId": 2, "themeOverrides": { "tokens": { "primary": "#111" } } }
+  `decorativeIcon` was fully removed (column dropped, not just deprecated).
+  Use `themeOverrides` (shape-level validated partial theme object)
+  instead, e.g.:
+    { "themeOverrides": { "tokens": { "primary": "#111" } } }
 }

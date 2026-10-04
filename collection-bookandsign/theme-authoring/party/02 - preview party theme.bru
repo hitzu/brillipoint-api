@@ -47,14 +47,13 @@ settings {
 }
 
 docs {
-  Purpose: dry-run resolve `SystemDefault -> preset -> (no kit) ->
-  themeOverrides` for the picked preset, with the same per-event overrides
+  Purpose: dry-run resolve `SystemDefault -> Brillipoint default -> preset
+  -> themeOverrides` for the picked preset, with the same per-event overrides
   the party flow intends to save in step 05 (confetti decoration). Nothing
   is persisted.
 
-  Inputs: `preset_id` (from step 01). `brandKitId`/`brandKit` are
-  deliberately omitted — the party flow has no kit, so `socialCta` in the
-  response falls back to the Brillipoint default kit.
+  Inputs: `preset_id` (from step 01). No `socialCta` override is sent, so
+  `socialCta` in the response falls back to the Brillipoint default.
 
   Sets: nothing (read-only dry run).
 

@@ -16,8 +16,6 @@ import { PhotoFactory } from '../../test/factories/photos/photo.factory';
 import { Event } from '../events/entities/event.entity';
 import { Photo } from './entities/photo.entity';
 import { EventsService } from '../events/events.service';
-import { BrandKitsService } from '../brand-kits/brand-kits.service';
-import { BrandKit } from '../brand-kits/entities/brand-kit.entity';
 import { Booking } from '../bookings/entities/booking.entity';
 import { PhotosService } from './photos.service';
 import { PinoLogger } from 'nestjs-pino';
@@ -65,7 +63,6 @@ describe('PhotosService', () => {
             validateEventThemeUpdate: jest.fn(),
           },
         },
-        BrandKitsService,
         {
           provide: ConfigService,
           useValue: {
@@ -89,10 +86,6 @@ describe('PhotosService', () => {
         {
           provide: getRepositoryToken(Event),
           useValue: TestDataSource.getRepository(Event),
-        },
-        {
-          provide: getRepositoryToken(BrandKit),
-          useValue: TestDataSource.getRepository(BrandKit),
         },
         {
           provide: getRepositoryToken(EventTheme),

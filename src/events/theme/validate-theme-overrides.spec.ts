@@ -1,4 +1,4 @@
-import { BRILLIPOINT_BRAND_KIT_OVERRIDES } from '../../brand-kits/brillipoint-kit.seed';
+import { BRILLIPOINT_DEFAULT_OVERRIDES } from './brillipoint-default';
 import {
   validatePublicThemeTokens,
   validateThemeOverrides,
@@ -835,11 +835,11 @@ describe('validateThemeOverrides', () => {
     });
   });
 
-  it('passes the Brillipoint brand kit seed against its own rules', () => {
+  it('passes the Brillipoint default layer against its own rules', () => {
     // Arrange
 
     // Act
-    const errors = validateThemeOverrides(BRILLIPOINT_BRAND_KIT_OVERRIDES);
+    const errors = validateThemeOverrides(BRILLIPOINT_DEFAULT_OVERRIDES);
 
     // Assert
     expect(errors).toEqual([]);
