@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Expose, Type } from 'class-transformer';
 import {
   IsDate,
+  IsEnum,
   IsNumber,
   IsObject,
   IsOptional,
@@ -11,6 +12,7 @@ import { EventThemeDto } from './event-theme/event-theme.dto';
 import { ServiceTypeDto } from './service-types/service-types.dto';
 import type { JsonValue } from './json-value';
 import type { ThemeOverrides } from '../theme/theme.types';
+import { GALLERY_STATUS } from '../constants/gallery_status.enum';
 
 export class EventResponseDto {
   @Expose()
@@ -147,6 +149,16 @@ export class EventResponseDto {
   })
   @IsOptional()
   printTemplates?: JsonValue;
+
+  @Expose()
+  @ApiPropertyOptional({
+    enum: GALLERY_STATUS,
+    description:
+      "Manual override of the public gallery status ('auto' | 'demo'). Admin-only: omitted from the public token read.",
+  })
+  @IsEnum(GALLERY_STATUS)
+  @IsOptional()
+  galleryStatus?: GALLERY_STATUS;
 
   @Expose()
   @ApiProperty()

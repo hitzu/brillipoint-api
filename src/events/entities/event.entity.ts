@@ -7,6 +7,7 @@ import {
   OneToOne,
 } from 'typeorm';
 
+import { GALLERY_STATUS } from '../constants/gallery_status.enum';
 import { BaseTimeEntity } from '../../common/entities/base-time.entity';
 import { UseDto } from '../../common/dto/use-dto.decorator';
 import { Contract } from '../../contracts/entities/contract.entity';
@@ -87,6 +88,18 @@ export class Event extends BaseTimeEntity {
    */
   @Column('jsonb', { name: 'theme_overrides', nullable: true })
   themeOverrides!: ThemeOverrides | null;
+
+  /**
+   * Manual override of the public gallery status (see `GALLERY_STATUS`).
+   * `demo` keeps the gallery `active` past the 30-day expiration; it only
+   * affects viewing, the upload guard is unchanged.
+   */
+  @Column('enum', {
+    name: 'gallery_status',
+    enum: GALLERY_STATUS,
+    default: GALLERY_STATUS.AUTO,
+  })
+  galleryStatus!: GALLERY_STATUS;
 
   @ManyToOne(() => EventType, (eventType) => eventType.events)
   @JoinColumn({ name: 'event_type_id' })

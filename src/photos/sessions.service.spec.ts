@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Repository } from 'typeorm';
 
 import { formatDateTimeInTimeZone } from '../common/utils/format-datetime-in-time-zone';
+import { GALLERY_STATUS } from '../events/constants/gallery_status.enum';
 import { EventsService } from '../events/events.service';
 import { PhotoStatus } from './enums';
 import { Photo } from './entities/photo.entity';
@@ -666,7 +667,7 @@ describe('SessionsService', () => {
       getMany: jest.fn().mockResolvedValue(coverPhotos),
     };
 
-    eventsService.getByToken.mockResolvedValue(event);
+    eventsService.findOneByToken.mockResolvedValue(event);
     eventsService.getPublicEventStatus.mockReturnValue(undefined);
     sessionRepository.find.mockResolvedValue(sessions);
     photoRepository.createQueryBuilder.mockReturnValue(queryBuilder);
@@ -720,7 +721,7 @@ describe('SessionsService', () => {
       getMany: jest.fn().mockResolvedValue(coverPhotos),
     };
 
-    eventsService.getByToken.mockResolvedValue(event);
+    eventsService.findOneByToken.mockResolvedValue(event);
     eventsService.getPublicEventStatus.mockReturnValue(undefined);
     sessionRepository.find.mockResolvedValue(sessions);
     photoRepository.createQueryBuilder.mockReturnValue(queryBuilder);
@@ -777,7 +778,7 @@ describe('SessionsService', () => {
       getMany: jest.fn().mockResolvedValue(coverPhotos),
     };
 
-    eventsService.getByToken.mockResolvedValue(event);
+    eventsService.findOneByToken.mockResolvedValue(event);
     eventsService.getPublicEventStatus.mockReturnValue(undefined);
     sessionRepository.find.mockResolvedValue(sessions);
     photoRepository.createQueryBuilder.mockReturnValue(queryBuilder);
@@ -829,7 +830,7 @@ describe('SessionsService', () => {
       getMany: jest.fn().mockResolvedValue(coverPhotos),
     };
 
-    eventsService.getByToken.mockResolvedValue(event);
+    eventsService.findOneByToken.mockResolvedValue(event);
     eventsService.getPublicEventStatus.mockReturnValue(undefined);
     sessionRepository.find.mockResolvedValue(sessions);
     photoRepository.createQueryBuilder.mockReturnValue(queryBuilder);
@@ -858,7 +859,7 @@ describe('SessionsService', () => {
       getMany: jest.fn().mockResolvedValue([]),
     };
 
-    eventsService.getByToken.mockResolvedValue(event);
+    eventsService.findOneByToken.mockResolvedValue(event);
     eventsService.getPublicEventStatus.mockReturnValue('finished');
     sessionRepository.find.mockResolvedValue([]);
     photoRepository.createQueryBuilder.mockReturnValue(queryBuilder);
@@ -866,6 +867,39 @@ describe('SessionsService', () => {
     const result = await service.getGallery(event.token);
 
     expect(result.event.status).toBe('finished');
+  });
+
+  it('should resolve the gallery status from the event entity so a demo gallery can stay active', async () => {
+    // Arrange
+    const event = {
+      id: 12,
+      contractId: 99,
+      token: '6f01177a-d7ef-4342-a6e1-618da5230a06',
+      honoreesNames: 'Alex y Sam',
+      albumPhrase: 'Nuestro album',
+      galleryStatus: GALLERY_STATUS.DEMO,
+    };
+    const queryBuilder = {
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([]),
+    };
+    eventsService.findOneByToken.mockResolvedValue(event);
+    eventsService.findEventBooking.mockResolvedValue(null);
+    eventsService.getPublicEventStatus.mockReturnValue('active');
+    sessionRepository.find.mockResolvedValue([]);
+    photoRepository.createQueryBuilder.mockReturnValue(queryBuilder);
+
+    // Act
+    await service.getGallery(event.token);
+
+    // Assert
+    expect(eventsService.getPublicEventStatus).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({ galleryStatus: GALLERY_STATUS.DEMO }),
+    );
   });
 
   it('should report the gallery event as finished when the contract has no EVENT booking, even though the legacy event.serviceStartsAt is recent', async () => {
@@ -886,7 +920,7 @@ describe('SessionsService', () => {
       getMany: jest.fn().mockResolvedValue([]),
     };
 
-    eventsService.getByToken.mockResolvedValue(event);
+    eventsService.findOneByToken.mockResolvedValue(event);
     eventsService.findEventBooking.mockResolvedValue(null);
     eventsService.getPublicEventStatus.mockImplementation((booking) =>
       booking == null ? 'finished' : 'active',
@@ -920,7 +954,7 @@ describe('SessionsService', () => {
       getMany: jest.fn().mockResolvedValue([]),
     };
 
-    eventsService.getByToken.mockResolvedValue(event);
+    eventsService.findOneByToken.mockResolvedValue(event);
     eventsService.findEventBooking.mockResolvedValue({ serviceStartsAt: bookingStart });
     eventsService.getPublicEventStatus.mockReturnValue('active');
     sessionRepository.find.mockResolvedValue([]);
@@ -966,7 +1000,7 @@ describe('SessionsService', () => {
       getMany: jest.fn().mockResolvedValue(coverPhotos),
     };
 
-    eventsService.getByToken.mockResolvedValue(event);
+    eventsService.findOneByToken.mockResolvedValue(event);
     eventsService.getPublicEventStatus.mockReturnValue(undefined);
     sessionRepository.find.mockResolvedValue(sessions);
     photoRepository.createQueryBuilder.mockReturnValue(queryBuilder);
@@ -1018,7 +1052,7 @@ describe('SessionsService', () => {
       getMany: jest.fn().mockResolvedValue(coverPhotos),
     };
 
-    eventsService.getByToken.mockResolvedValue(event);
+    eventsService.findOneByToken.mockResolvedValue(event);
     eventsService.getPublicEventStatus.mockReturnValue('finished');
     cache.getGallery.mockReturnValue({
       event: {

@@ -2,6 +2,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsDate,
+  IsEnum,
   IsInt,
   IsNumber,
   IsObject,
@@ -13,6 +14,7 @@ import {
 } from 'class-validator';
 import type { JsonValue } from './json-value';
 import type { ThemeOverrides } from '../theme/theme.types';
+import { GALLERY_STATUS } from '../constants/gallery_status.enum';
 import { IsThemeOverrides } from '../theme/validate-theme-overrides';
 
 export class UpdateEventDto {
@@ -142,6 +144,15 @@ export class UpdateEventDto {
   @IsThemeOverrides()
   @IsOptional()
   themeOverrides?: ThemeOverrides | null;
+
+  @ApiPropertyOptional({
+    enum: GALLERY_STATUS,
+    description:
+      "Manual override of the public gallery status. 'auto' derives it from the event date; 'demo' keeps the gallery active past its 30-day expiration (e.g. for sales demos). Does not reopen photo uploads.",
+  })
+  @IsEnum(GALLERY_STATUS)
+  @IsOptional()
+  galleryStatus?: GALLERY_STATUS;
 
   /** @deprecated Use booking (v2 events) instead. Removed in phase 2. */
   @ApiPropertyOptional({

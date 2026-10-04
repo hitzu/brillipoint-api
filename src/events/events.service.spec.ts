@@ -27,6 +27,9 @@ import { ServiceTypeFactory } from '../../test/factories/events/service-type.fac
 import { PinoLogger } from 'nestjs-pino';
 import { Booking } from '../bookings/entities/booking.entity';
 import { BOOKING_PURPOSE } from '../bookings/constants/booking_purpose.enum';
+import { PhotoFactory } from '../../test/factories/photos/photo.factory';
+import { Photo } from '../photos/entities/photo.entity';
+import { GALLERY_STATUS } from './constants/gallery_status.enum';
 
 describe('EventsService', () => {
   let service: EventsService;
@@ -643,7 +646,7 @@ describe('EventsService', () => {
 
   describe('getPublicEventStatus', () => {
     it('should return finished when there is no EVENT booking', () => {
-      expect(service.getPublicEventStatus(null)).toBe('finished');
+      expect(service.getPublicEventStatus(null, null)).toBe('finished');
     });
 
     it('should return active before the 30-day cutoff', () => {
@@ -651,7 +654,7 @@ describe('EventsService', () => {
       const now = new Date('2026-05-31T11:59:59.999Z');
 
       expect(
-        service.getPublicEventStatus({ serviceStartsAt } as Booking, now),
+        service.getPublicEventStatus({ serviceStartsAt } as Booking, null, now),
       ).toBe('active');
     });
 
@@ -660,7 +663,7 @@ describe('EventsService', () => {
       const now = new Date('2026-05-31T12:00:00.000Z');
 
       expect(
-        service.getPublicEventStatus({ serviceStartsAt } as Booking, now),
+        service.getPublicEventStatus({ serviceStartsAt } as Booking, null, now),
       ).toBe('active');
     });
 
@@ -669,8 +672,70 @@ describe('EventsService', () => {
       const now = new Date('2026-05-31T12:00:00.001Z');
 
       expect(
-        service.getPublicEventStatus({ serviceStartsAt } as Booking, now),
+        service.getPublicEventStatus({ serviceStartsAt } as Booking, null, now),
       ).toBe('finished');
+    });
+
+    it('should return active after the 30-day cutoff when the gallery status is demo', () => {
+      // Arrange
+      const serviceStartsAt = new Date('2026-05-01T12:00:00.000Z');
+      const now = new Date('2026-09-01T12:00:00.000Z');
+      const event = { galleryStatus: GALLERY_STATUS.DEMO };
+
+      // Act
+      const status = service.getPublicEventStatus(
+        { serviceStartsAt } as Booking,
+        event,
+        now,
+      );
+
+      // Assert
+      expect(status).toBe('active');
+    });
+
+    it('should return active without an EVENT booking when the gallery status is demo', () => {
+      // Arrange
+      const event = { galleryStatus: GALLERY_STATUS.DEMO };
+
+      // Act
+      const status = service.getPublicEventStatus(null, event);
+
+      // Assert
+      expect(status).toBe('active');
+    });
+
+    it('should return finished after the 30-day cutoff when the gallery status is auto', () => {
+      // Arrange
+      const serviceStartsAt = new Date('2026-05-01T12:00:00.000Z');
+      const now = new Date('2026-09-01T12:00:00.000Z');
+      const event = { galleryStatus: GALLERY_STATUS.AUTO };
+
+      // Act
+      const status = service.getPublicEventStatus(
+        { serviceStartsAt } as Booking,
+        event,
+        now,
+      );
+
+      // Assert
+      expect(status).toBe('finished');
+    });
+
+    it('should return active within the 30-day window when the gallery status is auto', () => {
+      // Arrange
+      const serviceStartsAt = new Date('2026-05-01T12:00:00.000Z');
+      const now = new Date('2026-05-20T12:00:00.000Z');
+      const event = { galleryStatus: GALLERY_STATUS.AUTO };
+
+      // Act
+      const status = service.getPublicEventStatus(
+        { serviceStartsAt } as Booking,
+        event,
+        now,
+      );
+
+      // Assert
+      expect(status).toBe('active');
     });
   });
 
@@ -837,6 +902,179 @@ describe('EventsService', () => {
       // Assert
       expect(result.bookingId).toBe(booking.id);
       expect(result.serviceStartsAt).toEqual(booking.serviceStartsAt);
+    });
+  });
+
+  describe('getByIdV2 gallery status', () => {
+    it('should report an expired event as active when its gallery status is demo', async () => {
+      // Arrange
+      const contractFactory = new ContractFactory(TestDataSource);
+      const contract = await contractFactory.create();
+      const event = await eventFactory.create({
+        contractId: contract.id,
+        galleryStatus: GALLERY_STATUS.DEMO,
+      });
+      await bookingFactory.create({
+        contractId: contract.id,
+        purpose: BOOKING_PURPOSE.EVENT,
+        serviceStartsAt: new Date('2020-01-01T10:00:00.000Z'),
+        serviceEndsAt: new Date('2020-01-01T18:00:00.000Z'),
+      });
+
+      // Act
+      const result = await service.getByIdV2(event.id);
+
+      // Assert
+      expect(result).toMatchObject({ status: 'active', galleryStatus: GALLERY_STATUS.DEMO });
+    });
+
+    it('should report an expired event as finished when its gallery status defaults to auto', async () => {
+      // Arrange
+      const contractFactory = new ContractFactory(TestDataSource);
+      const contract = await contractFactory.create();
+      const event = await eventFactory.create({ contractId: contract.id });
+      await bookingFactory.create({
+        contractId: contract.id,
+        purpose: BOOKING_PURPOSE.EVENT,
+        serviceStartsAt: new Date('2020-01-01T10:00:00.000Z'),
+        serviceEndsAt: new Date('2020-01-01T18:00:00.000Z'),
+      });
+
+      // Act
+      const result = await service.getByIdV2(event.id);
+
+      // Assert
+      expect(result).toMatchObject({ status: 'finished', galleryStatus: GALLERY_STATUS.AUTO });
+    });
+  });
+
+  describe('public token reads with a demo gallery', () => {
+    it('should expose the demo gallery only as an active status on the v2 token read', async () => {
+      // Arrange
+      const contractFactory = new ContractFactory(TestDataSource);
+      const contract = await contractFactory.create();
+      const event = await eventFactory.create({
+        contractId: contract.id,
+        galleryStatus: GALLERY_STATUS.DEMO,
+      });
+      await bookingFactory.create({
+        contractId: contract.id,
+        purpose: BOOKING_PURPOSE.EVENT,
+        serviceStartsAt: new Date('2020-01-01T10:00:00.000Z'),
+        serviceEndsAt: new Date('2020-01-01T18:00:00.000Z'),
+      });
+
+      // Act
+      const result = await service.getByTokenV2(event.token);
+
+      // Assert
+      expect(JSON.parse(JSON.stringify(result))).toMatchObject({ status: 'active' });
+    });
+
+    it('should not expose the gallery status on the v2 token read', async () => {
+      // Arrange
+      const event = await eventFactory.create({ galleryStatus: GALLERY_STATUS.DEMO });
+
+      // Act
+      const result = await service.getByTokenV2(event.token);
+
+      // Assert
+      expect(JSON.stringify(result)).not.toContain('demo');
+    });
+
+    it('should not expose the gallery status on the v1 token read', async () => {
+      // Arrange
+      const event = await eventFactory.create({ galleryStatus: GALLERY_STATUS.DEMO });
+
+      // Act
+      const result = await service.getByToken(event.token);
+
+      // Assert
+      expect(JSON.stringify(result)).not.toContain('demo');
+    });
+  });
+
+  describe('getByIdV2 activePhotoCount', () => {
+    it('should count only the non-soft-deleted photos of the event', async () => {
+      // Arrange
+      const photoFactory = new PhotoFactory(TestDataSource);
+      const event = await eventFactory.create();
+      const otherEvent = await eventFactory.create();
+      await photoFactory.create({ eventId: event.id });
+      await photoFactory.create({ eventId: event.id });
+      const deletedPhoto = await photoFactory.create({ eventId: event.id });
+      await TestDataSource.getRepository(Photo).softDelete(deletedPhoto.id);
+      await photoFactory.create({ eventId: otherEvent.id });
+
+      // Act
+      const result = await service.getByIdV2(event.id);
+
+      // Assert
+      expect(result.activePhotoCount).toBe(2);
+    });
+
+    it('should report zero when the event has no photos', async () => {
+      // Arrange
+      const event = await eventFactory.create();
+
+      // Act
+      const result = await service.getByIdV2(event.id);
+
+      // Assert
+      expect(result.activePhotoCount).toBe(0);
+    });
+
+    it('should not expose activePhotoCount on the public token read', async () => {
+      // Arrange
+      const photoFactory = new PhotoFactory(TestDataSource);
+      const event = await eventFactory.create();
+      await photoFactory.create({ eventId: event.id });
+
+      // Act
+      const result = await service.getByTokenV2(event.token);
+
+      // Assert
+      expect(result.activePhotoCount).toBeUndefined();
+    });
+  });
+
+  describe('update galleryStatus', () => {
+    it('should persist the demo gallery status', async () => {
+      // Arrange
+      const event = await eventFactory.create();
+
+      // Act
+      await service.update(event.id, { galleryStatus: GALLERY_STATUS.DEMO });
+
+      // Assert
+      const reloaded = await TestDataSource.getRepository(Event).findOneByOrFail({
+        id: event.id,
+      });
+      expect(reloaded.galleryStatus).toBe(GALLERY_STATUS.DEMO);
+    });
+
+    it('should return the gallery status in the update response', async () => {
+      // Arrange
+      const event = await eventFactory.create();
+
+      // Act
+      const result = await service.update(event.id, { galleryStatus: GALLERY_STATUS.DEMO });
+
+      // Assert
+      expect(result.galleryStatus).toBe(GALLERY_STATUS.DEMO);
+    });
+
+    it('should default a new event gallery status to auto', async () => {
+      // Arrange
+      const event = await eventFactory.create();
+
+      // Act
+      const reloaded = await TestDataSource.getRepository(Event).findOneByOrFail({
+        id: event.id,
+      });
+
+      // Assert
+      expect(reloaded.galleryStatus).toBe(GALLERY_STATUS.AUTO);
     });
   });
 

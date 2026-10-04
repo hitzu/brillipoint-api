@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Expose, Type } from 'class-transformer';
 import {
   IsDate,
+  IsEnum,
   IsIn,
   IsNumber,
   IsObject,
@@ -10,6 +11,7 @@ import {
 } from 'class-validator';
 import { EventThemeDto } from '../event-theme/event-theme.dto';
 import type { ThemeOverrides } from '../../theme/theme.types';
+import { GALLERY_STATUS } from '../../constants/gallery_status.enum';
 
 export class EventV2ResponseDto {
   @Expose()
@@ -107,7 +109,7 @@ export class EventV2ResponseDto {
   @ApiProperty({
     enum: ['active', 'finished'],
     description:
-      "Computed from the EVENT booking's serviceStartsAt; 'finished' when there is no EVENT booking",
+      "Computed from the EVENT booking's serviceStartsAt; 'finished' when there is no EVENT booking. Always 'active' when the admin gallery status is 'demo'",
   })
   @IsIn(['active', 'finished'])
   status!: 'active' | 'finished';
@@ -132,6 +134,26 @@ export class EventV2ResponseDto {
   @IsNumber()
   @IsOptional()
   eventThemeId?: number | null;
+
+  @Expose()
+  @ApiPropertyOptional({
+    enum: GALLERY_STATUS,
+    description:
+      "Manual override of the public gallery status ('auto' | 'demo'). Only present on the admin read by id (GET /v2/events/id/:id).",
+  })
+  @IsEnum(GALLERY_STATUS)
+  @IsOptional()
+  galleryStatus?: GALLERY_STATUS;
+
+  @Expose()
+  @ApiPropertyOptional({
+    type: Number,
+    description:
+      'Non-soft-deleted photos of the event. Only present on the admin read by id (GET /v2/events/id/:id).',
+  })
+  @IsNumber()
+  @IsOptional()
+  activePhotoCount?: number;
 
   @Expose()
   @ApiProperty()

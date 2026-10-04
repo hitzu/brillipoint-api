@@ -12,7 +12,9 @@ import { EntityManager, In, QueryFailedError, Repository } from 'typeorm';
 import { EXCEPTION_RESPONSE } from '../config/errors/exception-response.config';
 import { isUniqueViolation } from '../config/errors/exceptions-handler';
 import { Booking } from '../bookings/entities/booking.entity';
+import { Photo } from '../photos/entities/photo.entity';
 import { BOOKING_PURPOSE } from '../bookings/constants/booking_purpose.enum';
+import { GALLERY_STATUS } from './constants/gallery_status.enum';
 import { CreateEventDto } from './dto/create-event.dto';
 import { EventResponseDto } from './dto/event-response.dto';
 import { EventV2ResponseDto } from './dto/v2/event-v2-response.dto';
@@ -109,9 +111,12 @@ export class EventsService {
     if (!event) {
       throw new NotFoundException(EXCEPTION_RESPONSE.EVENT_NOT_FOUND);
     }
-    return plainToInstance(EventResponseDto, event, {
-      excludeExtraneousValues: true,
-    });
+    // Public read: the admin-only gallery status override is never exposed.
+    return plainToInstance(
+      EventResponseDto,
+      { ...event, galleryStatus: undefined },
+      { excludeExtraneousValues: true },
+    );
   }
 
   async getById(id: number): Promise<EventResponseDto> {
@@ -233,16 +238,22 @@ export class EventsService {
   }
 
   /**
-   * `finished` when the contract has no EVENT booking, or when the
-   * booking's `serviceStartsAt` is more than 30 days in the past;
-   * `active` otherwise. See "Phase 1b" in
+   * `active` whenever the event's `galleryStatus` is `demo` (staff override,
+   * e.g. for sales demos). Otherwise (`auto`) `finished` when the
+   * contract has no EVENT booking, or when the booking's `serviceStartsAt` is
+   * more than 30 days in the past; `active` otherwise. See "Phase 1b" in
    * `odd/tasks/event-fields-deprecation.md`: the booking is the only
    * source of schedule/status — there is no event-field fallback.
    */
   getPublicEventStatus(
     booking: { serviceStartsAt: Date } | null,
+    event: { galleryStatus: GALLERY_STATUS } | null,
     now: Date = new Date(),
   ): 'finished' | 'active' {
+    if (event?.galleryStatus === GALLERY_STATUS.DEMO) {
+      return 'active';
+    }
+
     if (booking == null) {
       return 'finished';
     }
@@ -286,8 +297,19 @@ export class EventsService {
     if (!event) {
       throw new NotFoundException(EXCEPTION_RESPONSE.EVENT_NOT_FOUND);
     }
-    const booking = await this.findEventBooking(event.contractId);
-    return this.toEventV2ResponseDto(event, booking);
+    const [booking, activePhotoCount] = await Promise.all([
+      this.findEventBooking(event.contractId),
+      this.countActivePhotos(event.id),
+    ]);
+    return this.toEventV2ResponseDto(event, booking, {
+      activePhotoCount,
+      galleryStatus: event.galleryStatus,
+    });
+  }
+
+  /** Photos of the event, excluding soft-deleted ones (TypeORM default). */
+  private countActivePhotos(eventId: number): Promise<number> {
+    return this.eventRepository.manager.count(Photo, { where: { eventId } });
   }
 
   async getByKeyV2(key: string): Promise<EventV2ResponseDto> {
@@ -332,17 +354,21 @@ export class EventsService {
   private toEventV2ResponseDto(
     event: Event,
     booking: Booking | null,
+    adminFields: { activePhotoCount?: number; galleryStatus?: GALLERY_STATUS } = {},
   ): EventV2ResponseDto {
     return plainToInstance(
       EventV2ResponseDto,
       {
         ...event,
+        // Admin-only: present only when the caller passes it in adminFields.
+        galleryStatus: undefined,
+        ...adminFields,
         serviceStartsAt: booking?.serviceStartsAt ?? null,
         serviceEndsAt: booking?.serviceEndsAt ?? null,
         venueName: booking?.venueName ?? null,
         mapsUrl: booking?.mapsUrl ?? null,
         bookingId: booking?.id ?? null,
-        status: this.getPublicEventStatus(booking),
+        status: this.getPublicEventStatus(booking, event),
       },
       { excludeExtraneousValues: true },
     );

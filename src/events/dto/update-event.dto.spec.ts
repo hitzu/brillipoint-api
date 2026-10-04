@@ -128,3 +128,33 @@ describe('UpdateEventDto eventThemeId', () => {
     );
   });
 });
+
+describe('UpdateEventDto galleryStatus', () => {
+  it.each(['auto', 'demo'])(
+    'accepts the %s gallery status through a whitelisting validation',
+    (galleryStatus) => {
+      // Arrange
+      const instance = plainToInstance(UpdateEventDto, { galleryStatus });
+
+      // Act
+      const errors = validateSync(instance, { whitelist: true });
+
+      // Assert
+      expect(errors).toHaveLength(0);
+    },
+  );
+
+  it.each(['active', 'finished', 'true', ''])(
+    'rejects the unknown gallery status %p',
+    (galleryStatus) => {
+      // Arrange
+      const instance = plainToInstance(UpdateEventDto, { galleryStatus });
+
+      // Act
+      const errors = validateSync(instance);
+
+      // Assert
+      expect(errors.some((error) => error.property === 'galleryStatus')).toBe(true);
+    },
+  );
+});

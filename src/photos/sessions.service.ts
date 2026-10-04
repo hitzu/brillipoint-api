@@ -314,7 +314,10 @@ export class SessionsService {
     const eventBooking = session.event
       ? await this.eventsService.findEventBooking(session.event.contractId)
       : null;
-    const eventStatus = this.eventsService.getPublicEventStatus(eventBooking);
+    const eventStatus = this.eventsService.getPublicEventStatus(
+      eventBooking,
+      session.event ?? null,
+    );
 
     const cached = this.cache.getSession(sessionToken);
     if (
@@ -365,9 +368,11 @@ export class SessionsService {
   }
 
   async getGallery(eventToken: string): Promise<GalleryResponseDto> {
-    const event = await this.eventsService.getByToken(eventToken);
+    // Entity read: the public DTO omits the admin-only galleryStatus override,
+    // which getPublicEventStatus needs to resolve the effective status.
+    const event = await this.eventsService.findOneByToken(eventToken);
     const eventBooking = await this.eventsService.findEventBooking(event.contractId);
-    const eventStatus = this.eventsService.getPublicEventStatus(eventBooking);
+    const eventStatus = this.eventsService.getPublicEventStatus(eventBooking, event);
 
     const cached = this.cache.getGallery(eventToken);
     if (
