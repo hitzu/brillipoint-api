@@ -24,6 +24,7 @@ import { CONTRACT_STATUS } from './types/contract-status.types';
 import { ContractExtra } from './entities/contract-extra.entity';
 import { EXTRA_PRODUCT_ACTION } from '../extras/types/extra-product-action.types';
 import {
+  DeliverableItem,
   toDeliverableItems,
   withoutProducts,
 } from './deliverables/deliverables';
@@ -637,6 +638,11 @@ export class ContractsService {
     const [items, extras, payments, paidAmount, bookings] = await Promise.all([
       this.contractPackagesRepository.find({
         where: { contractId },
+        relations: [
+          'package',
+          'package.packageProducts',
+          'package.packageProducts.product',
+        ],
       }),
       this.contractExtrasRepository.find({
         where: { contractId },
@@ -652,8 +658,8 @@ export class ContractsService {
         contract,
         slot: contract.slot,
         contractSlots: contract.contractSlots,
-        items,
-        extras,
+        items: items.map((item) => this.withPackageDeliverables(item)),
+        extras: extras.map((extra) => this.withExtraDeliverables(extra)),
         payments,
         paidAmount,
         bookings,
@@ -732,6 +738,27 @@ export class ContractsService {
     return await this.getDetail(contractId);
   }
 
+  /**
+   * Contracts created before snapshots existed have no itemsSnapshot; they
+   * fall back to the live catalog until they are backfilled.
+   */
+  private withPackageDeliverables(
+    item: ContractPackage,
+  ): ContractPackage & { deliverables: DeliverableItem[] } {
+    return {
+      ...item,
+      deliverables:
+        item.itemsSnapshot ??
+        toDeliverableItems(item.package?.packageProducts ?? []),
+    };
+  }
+
+  private withExtraDeliverables(
+    extra: ContractExtra,
+  ): ContractExtra & { deliverables: DeliverableItem[] } {
+    return { ...extra, deliverables: extra.itemsSnapshot ?? [] };
+  }
+
   private maskEmail(email: string): string {
     const trimmed = email.trim();
     const at = trimmed.indexOf('@');
@@ -790,8 +817,8 @@ export class ContractsService {
       {
         contract: maskedContract,
         contractSlots: contract.contractSlots,
-        packages,
-        extras,
+        packages: packages.map((item) => this.withPackageDeliverables(item)),
+        extras: extras.map((extra) => this.withExtraDeliverables(extra)),
         payments,
         paidAmount,
         bookings,

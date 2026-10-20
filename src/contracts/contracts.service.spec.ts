@@ -1429,6 +1429,53 @@ describe('ContractsService', () => {
   });
 
   describe('getDetail', () => {
+    it('should return the deliverables of each extra', async () => {
+      // Arrange
+      const user = await userFactory.create();
+      const brand = await brandFactory.create();
+      const productFactory = new ProductFactory(TestDataSource);
+      const canvasProduct = await productFactory.createForBrand(brand, {
+        name: 'Lienzo personalizado',
+      });
+      const pkg = await packageFactory.createForBrand(brand, {
+        basePrice: 2700,
+      });
+      const canvas = await extraFactory.createForBrand(brand, {
+        price: 700,
+        status: EXTRA_STATUS.ACTIVE,
+      });
+      await TestDataSource.getRepository(ExtraProduct).save({
+        extraId: canvas.id,
+        productId: canvasProduct.id,
+        quantity: 1,
+        action: EXTRA_PRODUCT_ACTION.ADD,
+      });
+      const created = await service.createContract({
+        userId: user.id,
+        brandId: brand.id,
+        sku: 'SKU-DELIVERABLES-ADMIN',
+        clientName: 'Ana',
+        clientPhone: null,
+        clientEmail: null,
+        packages: [{ packageId: pkg.id, quantity: 1, clientRef: 'pkg-1' }],
+        extras: [
+          { extraId: canvas.id, quantity: 1, packageClientRef: 'pkg-1' },
+        ],
+      });
+
+      // Act
+      const detail = await service.getDetail(created.id);
+
+      // Assert
+      expect(detail.extras[0]?.deliverables).toEqual([
+        {
+          productId: canvasProduct.id,
+          name: 'Lienzo personalizado',
+          quantity: 1,
+        },
+      ]);
+    });
+
     it('should throw if contract is not found', async () => {
       await expect(service.getDetail(999999)).rejects.toBeInstanceOf(
         NotFoundException,
@@ -1591,6 +1638,82 @@ describe('ContractsService', () => {
   });
 
   describe('getDetailByToken', () => {
+    const arrangePackageWithProducts = async () => {
+      const user = await userFactory.create();
+      const brand = await brandFactory.create();
+      const productFactory = new ProductFactory(TestDataSource);
+      const led = await productFactory.createForBrand(brand, {
+        name: 'Back con letrero LED',
+      });
+      const pkg = await packageFactory.createForBrand(brand, {
+        basePrice: 2700,
+      });
+      await TestDataSource.getRepository(PackageProduct).save({
+        packageId: pkg.id,
+        productId: led.id,
+        quantity: 1,
+      });
+      return { user, brand, pkg, led };
+    };
+
+    it('should return the frozen deliverables even after the catalog changes', async () => {
+      // Arrange
+      const { user, brand, pkg } = await arrangePackageWithProducts();
+      const created = await service.createContract({
+        userId: user.id,
+        brandId: brand.id,
+        sku: 'SKU-DELIVERABLES-PUBLIC',
+        clientName: 'Ana',
+        clientPhone: null,
+        clientEmail: null,
+        packages: [{ packageId: pkg.id, quantity: 1, clientRef: 'pkg-1' }],
+      });
+      const contract = await contractsRepo.findOneByOrFail({ id: created.id });
+      await TestDataSource.getRepository(PackageProduct).delete({
+        packageId: pkg.id,
+      });
+
+      // Act
+      const detail = await service.getDetailByToken(contract.token);
+
+      // Assert
+      expect(detail.packages[0]?.deliverables.map((d) => d.name)).toEqual([
+        'Back con letrero LED',
+      ]);
+    });
+
+    it('should fall back to the catalog products for contracts without a snapshot', async () => {
+      // Arrange
+      const { user, brand, pkg, led } = await arrangePackageWithProducts();
+      const contract = await contractsRepo.save(
+        contractsRepo.create({
+          userId: user.id,
+          brandId: brand.id,
+          sku: 'SKU-LEGACY-001',
+          token: 'legacy-token-001',
+          status: CONTRACT_STATUS.CONFIRMED,
+          clientName: 'Ana',
+        }),
+      );
+      await contractPackagesRepo.save(
+        contractPackagesRepo.create({
+          contractId: contract.id,
+          packageId: pkg.id,
+          quantity: 1,
+          nameSnapshot: pkg.name,
+          basePriceSnapshot: 2700,
+        }),
+      );
+
+      // Act
+      const detail = await service.getDetailByToken(contract.token);
+
+      // Assert
+      expect(detail.packages[0]?.deliverables).toEqual([
+        { productId: led.id, name: 'Back con letrero LED', quantity: 1 },
+      ]);
+    });
+
     it('should return masked client data and include extra snapshots', async () => {
       const user = await userFactory.create();
       const brand = await brandFactory.create();

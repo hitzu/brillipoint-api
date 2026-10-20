@@ -2,6 +2,7 @@ import { Expose, Type } from 'class-transformer';
 import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { PackageResponseDto } from '../../packages/dto/package-response.dto';
 import { PromotionDto } from '../../promotions/dto/promotion.dto';
+import { DeliverableItemDto } from './deliverable-item.dto';
 
 export class ContractPackageDto {
   @Expose()
@@ -44,4 +45,12 @@ export class ContractPackageDto {
   @Expose()
   @Type(() => PromotionDto)
   promotion?: PromotionDto;
+
+  /**
+   * Products delivered under this line: the contracting-time snapshot, or the
+   * live catalog for contracts created before snapshots existed.
+   */
+  @Expose()
+  @Type(() => DeliverableItemDto)
+  deliverables: DeliverableItemDto[] = [];
 }

@@ -3,6 +3,7 @@ import { IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
 
 import { ExtraResponseDto } from '../../extras/dto/extra-response.dto';
 import { PromotionDto } from '../../promotions/dto/promotion.dto';
+import { DeliverableItemDto } from './deliverable-item.dto';
 
 export class ContractExtraDto {
   @Expose()
@@ -54,4 +55,12 @@ export class ContractExtraDto {
   @Expose()
   @Type(() => PromotionDto)
   promotion?: PromotionDto;
+
+  /**
+   * Products delivered under this line: the contracting-time snapshot, or the
+   * live catalog for contracts created before snapshots existed.
+   */
+  @Expose()
+  @Type(() => DeliverableItemDto)
+  deliverables: DeliverableItemDto[] = [];
 }
