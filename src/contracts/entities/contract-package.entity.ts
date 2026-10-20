@@ -1,6 +1,7 @@
 import { Column, Entity, JoinColumn, ManyToOne } from 'typeorm';
 
 import { BaseTimeEntity } from '../../common/entities/base-time.entity';
+import type { DeliverableItem } from '../deliverables/deliverables';
 import { Contract } from './contract.entity';
 import { Package } from '../../packages/entities/package.entity';
 import { Promotion } from '../../promotions/entities/promotion.entity';
@@ -57,6 +58,13 @@ export class ContractPackage extends BaseTimeEntity {
 
   @Column('integer', { default: 1 })
   quantity: number = 1;
+
+  /**
+   * Products delivered under this line, frozen at contracting time. Null on
+   * rows created before snapshots existed — readers fall back to the catalog.
+   */
+  @Column('jsonb', { name: 'items_snapshot', nullable: true })
+  itemsSnapshot: DeliverableItem[] | null = null;
 
   @ManyToOne(() => Contract, (contract) => contract.items, { nullable: false })
   @JoinColumn({ name: 'contract_id' })

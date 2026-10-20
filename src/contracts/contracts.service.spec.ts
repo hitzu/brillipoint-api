@@ -14,6 +14,10 @@ import { PackageFactory } from '../../test/factories/packages/package.factory';
 import { SlotFactory } from '../../test/factories/slots/slot.factory';
 import { UserFactory } from '../../test/factories/user/user.factory';
 import { ExtraFactory } from '../../test/factories/extras/extra.factory';
+import { ProductFactory } from '../../test/factories/products/product.factory';
+import { ExtraProduct } from '../extras/entities/extra-product.entity';
+import { EXTRA_PRODUCT_ACTION } from '../extras/types/extra-product-action.types';
+import { PackageProduct } from '../packages/entities/package-product.entity';
 import { PromotionFactory } from '../../test/factories/promotions/promotion.factory';
 import { PromotionPackageFactory } from '../../test/factories/promotions/promotion-package.factory';
 import { PaymentsService } from '../payments/payments.service';
@@ -757,6 +761,165 @@ describe('ContractsService', () => {
         where: { id: result.id },
       });
       expect(savedContract).not.toBeNull();
+    });
+  });
+
+  describe('createContract deliverables snapshot', () => {
+    const arrangeSignatureWithCanvas = async () => {
+      const user = await userFactory.create();
+      const brand = await brandFactory.create();
+      const productFactory = new ProductFactory(TestDataSource);
+      const led = await productFactory.createForBrand(brand, {
+        name: 'Back con letrero LED',
+      });
+      const polaroid = await productFactory.createForBrand(brand, {
+        name: 'Impresión polaroid',
+      });
+      const album = await productFactory.createForBrand(brand, {
+        name: 'Mini álbum',
+      });
+      const canvasProduct = await productFactory.createForBrand(brand, {
+        name: 'Lienzo personalizado',
+      });
+      const strip = await productFactory.createForBrand(brand, {
+        name: 'Tira de fotos',
+      });
+      const pkg = await packageFactory.createForBrand(brand, {
+        basePrice: 2700,
+      });
+      await TestDataSource.getRepository(PackageProduct).save(
+        [led, polaroid, album].map((product) => ({
+          packageId: pkg.id,
+          productId: product.id,
+          quantity: 1,
+        })),
+      );
+      const canvas = await extraFactory.createForBrand(brand, {
+        price: 700,
+        status: EXTRA_STATUS.ACTIVE,
+      });
+      await TestDataSource.getRepository(ExtraProduct).save([
+        {
+          extraId: canvas.id,
+          productId: canvasProduct.id,
+          quantity: 1,
+          action: EXTRA_PRODUCT_ACTION.ADD,
+        },
+        {
+          extraId: canvas.id,
+          productId: strip.id,
+          quantity: 1,
+          action: EXTRA_PRODUCT_ACTION.ADD,
+        },
+        {
+          extraId: canvas.id,
+          productId: polaroid.id,
+          quantity: 1,
+          action: EXTRA_PRODUCT_ACTION.REMOVE,
+        },
+        {
+          extraId: canvas.id,
+          productId: album.id,
+          quantity: 1,
+          action: EXTRA_PRODUCT_ACTION.REMOVE,
+        },
+      ]);
+      const baseDto: CreateContractFromSlotsDto = {
+        userId: user.id,
+        brandId: brand.id,
+        sku: 'SKU-DELIVERABLES',
+        clientName: 'Ana',
+        clientPhone: null,
+        clientEmail: null,
+        packages: [{ packageId: pkg.id, quantity: 1, clientRef: 'pkg-1' }],
+        extras: [],
+      };
+      return { pkg, canvas, led, canvasProduct, strip, baseDto };
+    };
+
+    it('should freeze the package products minus the ones its extras remove', async () => {
+      // Arrange
+      const { pkg, canvas, led, baseDto } = await arrangeSignatureWithCanvas();
+      const dto: CreateContractFromSlotsDto = {
+        ...baseDto,
+        extras: [
+          { extraId: canvas.id, quantity: 1, packageClientRef: 'pkg-1' },
+        ],
+      };
+
+      // Act
+      const result = await service.createContract(dto);
+
+      // Assert
+      const contractPackage = await contractPackagesRepo.findOne({
+        where: { contractId: result.id, packageId: pkg.id },
+      });
+      expect(contractPackage?.itemsSnapshot).toEqual([
+        { productId: led.id, name: 'Back con letrero LED', quantity: 1 },
+      ]);
+    });
+
+    it('should freeze the products each extra adds', async () => {
+      // Arrange
+      const { canvas, canvasProduct, strip, baseDto } =
+        await arrangeSignatureWithCanvas();
+      const dto: CreateContractFromSlotsDto = {
+        ...baseDto,
+        extras: [
+          { extraId: canvas.id, quantity: 1, packageClientRef: 'pkg-1' },
+        ],
+      };
+
+      // Act
+      const result = await service.createContract(dto);
+
+      // Assert
+      const contractExtra = await contractExtrasRepo.findOne({
+        where: { contractId: result.id, extraId: canvas.id },
+      });
+      expect(contractExtra?.itemsSnapshot).toEqual([
+        {
+          productId: canvasProduct.id,
+          name: 'Lienzo personalizado',
+          quantity: 1,
+        },
+        { productId: strip.id, name: 'Tira de fotos', quantity: 1 },
+      ]);
+    });
+
+    it('should keep every package product when the removing extra is not linked to it', async () => {
+      // Arrange
+      const { pkg, canvas, baseDto } = await arrangeSignatureWithCanvas();
+      const dto: CreateContractFromSlotsDto = {
+        ...baseDto,
+        extras: [{ extraId: canvas.id, quantity: 1 }],
+      };
+
+      // Act
+      const result = await service.createContract(dto);
+
+      // Assert
+      const contractPackage = await contractPackagesRepo.findOne({
+        where: { contractId: result.id, packageId: pkg.id },
+      });
+      expect(contractPackage?.itemsSnapshot).toHaveLength(3);
+    });
+
+    it('should not change the snapshot when the package products change later', async () => {
+      // Arrange
+      const { pkg, baseDto } = await arrangeSignatureWithCanvas();
+      const result = await service.createContract(baseDto);
+
+      // Act
+      await TestDataSource.getRepository(PackageProduct).delete({
+        packageId: pkg.id,
+      });
+
+      // Assert
+      const contractPackage = await contractPackagesRepo.findOne({
+        where: { contractId: result.id, packageId: pkg.id },
+      });
+      expect(contractPackage?.itemsSnapshot).toHaveLength(3);
     });
   });
 

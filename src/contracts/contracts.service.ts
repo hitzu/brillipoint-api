@@ -22,6 +22,11 @@ import { CreateContractFromSlotsDto } from './dto/create-contract-from-slots.dto
 import { UpdateItemDto } from './dto/update-item.dto';
 import { CONTRACT_STATUS } from './types/contract-status.types';
 import { ContractExtra } from './entities/contract-extra.entity';
+import { EXTRA_PRODUCT_ACTION } from '../extras/types/extra-product-action.types';
+import {
+  toDeliverableItems,
+  withoutProducts,
+} from './deliverables/deliverables';
 import { ContractPackage } from './entities/contract-package.entity';
 import { Slot } from '../slots/entities/slot.entity';
 import { SLOT_STATUS } from '../slots/types/slot-status.types';
@@ -223,6 +228,7 @@ export class ContractsService {
 
         const extraApplied = await this.setExtras(
           contractExtrasRepo,
+          contractPackagesRepo,
           savedContract.id,
           brandId,
           dto.extras,
@@ -295,8 +301,9 @@ export class ContractsService {
       return { packagesByClientRef, appliedAmountByPromotionId };
     }
 
-    const packages = await packagesRepo.findBy({
-      id: In(dto.map((p) => p.packageId)),
+    const packages = await packagesRepo.find({
+      where: { id: In(dto.map((p) => p.packageId)) },
+      relations: ['packageProducts', 'packageProducts.product'],
     });
     const packageById = new Map(packages.map((p) => [p.id, p]));
 
@@ -322,6 +329,7 @@ export class ContractsService {
         basePriceSnapshot: basePrice,
         discountPercentageSnapshot: discountPercentage,
         finalPriceSnapshot: finalPrice,
+        itemsSnapshot: toDeliverableItems(pkg.packageProducts ?? []),
       });
       const saved = await contractPackagesRepo.save(itemToSave);
       if (packageInfo.clientRef) {
@@ -393,6 +401,7 @@ export class ContractsService {
    */
   private async setExtras(
     contractExtrasRepo: Repository<ContractExtra>,
+    contractPackagesRepo: Repository<ContractPackage>,
     contractId: number,
     brandId: number | null,
     dto: AddExtraDto[] | undefined,
@@ -418,6 +427,7 @@ export class ContractsService {
         : new Map<number, ActiveTierInfo>();
 
     const tierPositionByContractPackage = new Map<number, number>();
+    const removedProductIdsByContractPackage = new Map<number, number[]>();
 
     for (const extraInfo of dto) {
       const extra = resolvedExtras.get(extraInfo.extraId);
@@ -457,6 +467,18 @@ export class ContractsService {
       const finalPrice =
         basePrice * extraInfo.quantity * (1 - discountPercentage / 100);
 
+      const extraProducts = extra.extraProducts ?? [];
+      if (contractPackage) {
+        const removed =
+          removedProductIdsByContractPackage.get(contractPackage.id) ?? [];
+        removed.push(
+          ...extraProducts
+            .filter((p) => p.action === EXTRA_PRODUCT_ACTION.REMOVE)
+            .map((p) => p.productId),
+        );
+        removedProductIdsByContractPackage.set(contractPackage.id, removed);
+      }
+
       const extraToSave = contractExtrasRepo.create({
         contractId,
         extraId: extraInfo.extraId,
@@ -468,6 +490,9 @@ export class ContractsService {
         finalPriceSnapshot: finalPrice,
         quantity: extraInfo.quantity,
         isGift,
+        itemsSnapshot: toDeliverableItems(
+          extraProducts.filter((p) => p.action === EXTRA_PRODUCT_ACTION.ADD),
+        ),
       });
       await contractExtrasRepo.save(extraToSave);
 
@@ -479,6 +504,20 @@ export class ContractsService {
           (appliedAmountByPromotionId.get(promotionId) ?? 0) + appliedAmount,
         );
       }
+    }
+
+    for (const contractPackage of packagesByClientRef.values()) {
+      const removed = removedProductIdsByContractPackage.get(
+        contractPackage.id,
+      );
+      if (!removed?.length) {
+        continue;
+      }
+      contractPackage.itemsSnapshot = withoutProducts(
+        contractPackage.itemsSnapshot ?? [],
+        removed,
+      );
+      await contractPackagesRepo.save(contractPackage);
     }
 
     return appliedAmountByPromotionId;
@@ -880,8 +919,9 @@ export class ContractsService {
       );
     }
 
-    const extras = await extrasRepo.findBy({
-      id: In(dto.map((extra) => extra.extraId)),
+    const extras = await extrasRepo.find({
+      where: { id: In(dto.map((extra) => extra.extraId)) },
+      relations: ['extraProducts', 'extraProducts.product'],
     });
     const extraById = new Map(extras.map((extra) => [extra.id, extra]));
 
