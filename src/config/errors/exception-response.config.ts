@@ -45,6 +45,7 @@ enum ErrorMessages {
   BOOKING_OVERLAP = 'BOOKING_OVERLAP',
   BOOKING_CONTRACT_ALREADY_HAS_EVENT = 'BOOKING_CONTRACT_ALREADY_HAS_EVENT',
   EVENT_THEME_NOT_FOUND = 'EVENT_THEME_NOT_FOUND',
+  EXTRA_PRODUCT_INVALID = 'EXTRA_PRODUCT_INVALID',
 }
 
 export const EXCEPTION_RESPONSE: Record<
@@ -235,5 +236,9 @@ export const EXCEPTION_RESPONSE: Record<
   [ErrorMessages.EVENT_THEME_NOT_FOUND]: {
     code: 49,
     message: 'event theme not found',
+  },
+  [ErrorMessages.EXTRA_PRODUCT_INVALID]: {
+    code: 50,
+    message: 'extra products must exist and belong to the extra brand',
   },
 };

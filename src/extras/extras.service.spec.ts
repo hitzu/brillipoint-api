@@ -1,16 +1,19 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { BrandFactory } from '@factories/brands/brands.factories';
 import { ExtraFactory } from '@factories/extras/extra.factory';
+import { ProductFactory } from '@factories/products/product.factory';
 import { AppDataSource as TestDataSource } from '../config/database/data-source';
 import { CreateExtraDto } from './dto/create-extra.dto';
 import { FindExtrasQueryDto } from './dto/find-extras-query.dto';
 import { UpdateExtraDto } from './dto/update-extra.dto';
 import { Extra } from './entities/extra.entity';
+import { ExtraProduct } from './entities/extra-product.entity';
 import { ExtrasService } from './extras.service';
+import { EXTRA_PRODUCT_ACTION } from './types/extra-product-action.types';
 import { EXTRA_STATUS } from './types/extras-status.types';
 
 describe('ExtrasService', () => {
@@ -18,6 +21,7 @@ describe('ExtrasService', () => {
   let extrasRepository: Repository<Extra>;
   let extraFactory: ExtraFactory;
   let brandFactory: BrandFactory;
+  let productFactory: ProductFactory;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -27,6 +31,10 @@ describe('ExtrasService', () => {
           provide: getRepositoryToken(Extra),
           useValue: TestDataSource.getRepository(Extra),
         },
+        {
+          provide: getRepositoryToken(ExtraProduct),
+          useValue: TestDataSource.getRepository(ExtraProduct),
+        },
       ],
     }).compile();
 
@@ -34,6 +42,7 @@ describe('ExtrasService', () => {
     extrasRepository = module.get<Repository<Extra>>(getRepositoryToken(Extra));
     extraFactory = new ExtraFactory(TestDataSource);
     brandFactory = new BrandFactory(TestDataSource);
+    productFactory = new ProductFactory(TestDataSource);
   });
 
   describe('create', () => {
@@ -71,6 +80,61 @@ describe('ExtrasService', () => {
 
       expect(result.status).toBe(EXTRA_STATUS.ACTIVE);
       expect(result.description).toBeNull();
+    });
+
+    it('should store the products the extra adds and removes', async () => {
+      // Arrange
+      const brand = await brandFactory.create();
+      const canvas = await productFactory.createForBrand(brand);
+      const polaroid = await productFactory.createForBrand(brand);
+      const dto: CreateExtraDto = {
+        brandId: brand.id,
+        name: 'Lienzo personalizado',
+        price: 700,
+        products: [
+          {
+            productId: canvas.id,
+            quantity: 1,
+            action: EXTRA_PRODUCT_ACTION.ADD,
+          },
+          { productId: polaroid.id, action: EXTRA_PRODUCT_ACTION.REMOVE },
+        ],
+      };
+
+      // Act
+      const created = await service.create(dto);
+      const result = await service.findOne(created.id);
+
+      // Assert
+      expect(
+        result.products.map((p) => [p.productId, p.action, p.quantity]),
+      ).toEqual(
+        expect.arrayContaining([
+          [canvas.id, EXTRA_PRODUCT_ACTION.ADD, 1],
+          [polaroid.id, EXTRA_PRODUCT_ACTION.REMOVE, 1],
+        ]),
+      );
+    });
+
+    it('should reject a product that belongs to another brand', async () => {
+      // Arrange
+      const brand = await brandFactory.create();
+      const otherBrand = await brandFactory.create();
+      const foreignProduct = await productFactory.createForBrand(otherBrand);
+      const dto: CreateExtraDto = {
+        brandId: brand.id,
+        name: 'Lienzo personalizado',
+        price: 700,
+        products: [
+          { productId: foreignProduct.id, action: EXTRA_PRODUCT_ACTION.ADD },
+        ],
+      };
+
+      // Act
+      const act = service.create(dto);
+
+      // Assert
+      await expect(act).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -162,6 +226,51 @@ describe('ExtrasService', () => {
       expect(result.status).toBe(EXTRA_STATUS.INACTIVE);
       expect(result.brandId).toBe(brand.id);
     });
+
+    it('should replace the product list when products are sent', async () => {
+      // Arrange
+      const brand = await brandFactory.create();
+      const oldProduct = await productFactory.createForBrand(brand);
+      const newProduct = await productFactory.createForBrand(brand);
+      const created = await service.create({
+        brandId: brand.id,
+        name: 'Lienzo',
+        price: 700,
+        products: [
+          { productId: oldProduct.id, action: EXTRA_PRODUCT_ACTION.ADD },
+        ],
+      });
+
+      // Act
+      const result = await service.update(created.id, {
+        products: [
+          { productId: newProduct.id, action: EXTRA_PRODUCT_ACTION.REMOVE },
+        ],
+      });
+
+      // Assert
+      expect(result.products.map((p) => [p.productId, p.action])).toEqual([
+        [newProduct.id, EXTRA_PRODUCT_ACTION.REMOVE],
+      ]);
+    });
+
+    it('should keep the product list when products are not sent', async () => {
+      // Arrange
+      const brand = await brandFactory.create();
+      const product = await productFactory.createForBrand(brand);
+      const created = await service.create({
+        brandId: brand.id,
+        name: 'Lienzo',
+        price: 700,
+        products: [{ productId: product.id, action: EXTRA_PRODUCT_ACTION.ADD }],
+      });
+
+      // Act
+      const result = await service.update(created.id, { price: 750 });
+
+      // Assert
+      expect(result.products.map((p) => p.productId)).toEqual([product.id]);
+    });
   });
 
   describe('remove', () => {
@@ -187,10 +296,7 @@ describe('ExtrasService', () => {
   describe('findExtrasStatus', () => {
     it('should return all extra statuses', () => {
       expect(service.findExtrasStatus()).toEqual(
-        expect.arrayContaining([
-          EXTRA_STATUS.ACTIVE,
-          EXTRA_STATUS.INACTIVE,
-        ]),
+        expect.arrayContaining([EXTRA_STATUS.ACTIVE, EXTRA_STATUS.INACTIVE]),
       );
     });
   });

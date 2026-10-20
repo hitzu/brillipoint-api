@@ -6,14 +6,17 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { plainToInstance } from 'class-transformer';
-import { FindOptionsWhere, Repository } from 'typeorm';
+import { EntityManager, FindOptionsWhere, In, Repository } from 'typeorm';
 
 import { EXCEPTION_RESPONSE } from '../config/errors/exception-response.config';
+import { Product } from '../products/entities/product.entity';
 import { CreateExtraDto } from './dto/create-extra.dto';
+import { ExtraProductInputDto } from './dto/extra-product-input.dto';
 import { ExtraResponseDto } from './dto/extra-response.dto';
 import { FindExtrasQueryDto } from './dto/find-extras-query.dto';
 import { UpdateExtraDto } from './dto/update-extra.dto';
 import { Extra } from './entities/extra.entity';
+import { ExtraProduct } from './entities/extra-product.entity';
 import { EXTRA_STATUS } from './types/extras-status.types';
 
 @Injectable()
@@ -25,16 +28,30 @@ export class ExtrasService {
     private readonly extrasRepository: Repository<Extra>,
   ) {}
 
-  create(createExtraDto: CreateExtraDto) {
+  async create(createExtraDto: CreateExtraDto) {
     try {
       this.logger.log({ createExtraDto }, 'Creating extra');
-      const extraToSave = this.extrasRepository.create({
-        ...createExtraDto,
-        description: createExtraDto.description ?? null,
-        price: createExtraDto.price ?? null,
-        status: createExtraDto.status ?? EXTRA_STATUS.ACTIVE,
-      });
-      return this.extrasRepository.save(extraToSave);
+      const { products, ...extraFields } = createExtraDto;
+      return await this.extrasRepository.manager.transaction(
+        async (manager) => {
+          const extraToSave = manager.create(Extra, {
+            ...extraFields,
+            description: extraFields.description ?? null,
+            price: extraFields.price ?? null,
+            status: extraFields.status ?? EXTRA_STATUS.ACTIVE,
+          });
+          const savedExtra = await manager.save(extraToSave);
+          if (products) {
+            await this.replaceProducts(
+              manager,
+              savedExtra.id,
+              savedExtra.brandId,
+              products,
+            );
+          }
+          return savedExtra;
+        },
+      );
     } catch (error) {
       this.logger.error(error, 'Error creating extra');
       throw error;
@@ -44,7 +61,7 @@ export class ExtrasService {
   async findAll(): Promise<ExtraResponseDto[]> {
     try {
       const extras = await this.extrasRepository.find({
-        relations: ['brand'],
+        relations: ['brand', 'extraProducts', 'extraProducts.product'],
       });
       return plainToInstance(ExtraResponseDto, extras, {
         excludeExtraneousValues: true,
@@ -68,7 +85,7 @@ export class ExtrasService {
 
       const extras = await this.extrasRepository.find({
         where,
-        relations: ['brand'],
+        relations: ['brand', 'extraProducts', 'extraProducts.product'],
       });
       return plainToInstance(ExtraResponseDto, extras, {
         excludeExtraneousValues: true,
@@ -83,7 +100,7 @@ export class ExtrasService {
     try {
       const foundExtra = await this.extrasRepository.findOne({
         where: { id },
-        relations: ['brand'],
+        relations: ['brand', 'extraProducts', 'extraProducts.product'],
       });
       if (!foundExtra) {
         throw new NotFoundException(EXCEPTION_RESPONSE.EXTRA_NOT_FOUND);
@@ -100,8 +117,21 @@ export class ExtrasService {
 
   async update(id: number, updateExtraDto: UpdateExtraDto) {
     try {
-      await this.assertExists(id);
-      await this.extrasRepository.update(id, updateExtraDto);
+      const existing = await this.assertExists(id);
+      const { products, ...extraFields } = updateExtraDto;
+      await this.extrasRepository.manager.transaction(async (manager) => {
+        if (Object.keys(extraFields).length > 0) {
+          await manager.update(Extra, id, extraFields);
+        }
+        if (products) {
+          await this.replaceProducts(
+            manager,
+            id,
+            extraFields.brandId ?? existing.brandId,
+            products,
+          );
+        }
+      });
       return this.findOne(id);
     } catch (error) {
       this.logger.error(error, 'Error updating extra');
@@ -123,7 +153,39 @@ export class ExtrasService {
     return Object.values(EXTRA_STATUS);
   }
 
-  private async assertExists(id: number): Promise<void> {
+  private async replaceProducts(
+    manager: EntityManager,
+    extraId: number,
+    brandId: number,
+    products: ExtraProductInputDto[],
+  ): Promise<void> {
+    const productIds = Array.from(new Set(products.map((p) => p.productId)));
+    if (productIds.length > 0) {
+      const found = await manager.count(Product, {
+        where: { id: In(productIds), brandId },
+      });
+      if (found !== productIds.length) {
+        throw new BadRequestException(EXCEPTION_RESPONSE.EXTRA_PRODUCT_INVALID);
+      }
+    }
+
+    await manager.delete(ExtraProduct, { extraId });
+    if (products.length === 0) {
+      return;
+    }
+    await manager.save(
+      products.map((product) =>
+        manager.create(ExtraProduct, {
+          extraId,
+          productId: product.productId,
+          quantity: product.quantity ?? 1,
+          action: product.action,
+        }),
+      ),
+    );
+  }
+
+  private async assertExists(id: number): Promise<Extra> {
     const foundExtra = await this.extrasRepository.findOne({
       where: { id },
     });
@@ -131,5 +193,6 @@ export class ExtrasService {
     if (!foundExtra) {
       throw new NotFoundException(EXCEPTION_RESPONSE.EXTRA_NOT_FOUND);
     }
+    return foundExtra;
   }
 }

@@ -1,8 +1,9 @@
-import { Column, Entity, JoinColumn, ManyToOne } from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
 
 import { Brand } from '../../brands/entities/brand.entity';
 import { BaseTimeEntity } from '../../common/entities/base-time.entity';
 import { EXTRA_STATUS } from '../types/extras-status.types';
+import { ExtraProduct } from './extra-product.entity';
 
 @Entity('extras')
 export class Extra extends BaseTimeEntity {
@@ -34,4 +35,7 @@ export class Extra extends BaseTimeEntity {
   @ManyToOne(() => Brand, { nullable: true })
   @JoinColumn({ name: 'brand_id' })
   brand?: Brand | null;
+
+  @OneToMany(() => ExtraProduct, (extraProduct) => extraProduct.extra)
+  extraProducts?: ExtraProduct[];
 }
