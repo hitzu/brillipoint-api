@@ -1,4 +1,4 @@
-import { IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class AddExtraDto {
   @IsNumber()
@@ -16,4 +16,13 @@ export class AddExtraDto {
   @IsString()
   @IsOptional()
   packageClientRef?: string;
+
+  /**
+   * Staff courtesy: the extra is delivered at no cost. Its catalog price is
+   * still snapshotted so the gifted value stays reportable, and it does not
+   * consume a promotion tier.
+   */
+  @IsBoolean()
+  @IsOptional()
+  isGift?: boolean;
 }

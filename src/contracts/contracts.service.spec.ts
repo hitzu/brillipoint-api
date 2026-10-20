@@ -760,6 +760,119 @@ describe('ContractsService', () => {
     });
   });
 
+  describe('createContract with gifted extras', () => {
+    it('should charge nothing for a gifted extra and keep its catalog price', async () => {
+      // Arrange
+      const user = await userFactory.create();
+      const brand = await brandFactory.create();
+      const pkg = await packageFactory.createForBrand(brand, {
+        basePrice: 2700,
+      });
+      const canvas = await extraFactory.createForBrand(brand, {
+        price: 700,
+        status: EXTRA_STATUS.ACTIVE,
+      });
+      const extraTime = await extraFactory.createForBrand(brand, {
+        price: 500,
+        status: EXTRA_STATUS.ACTIVE,
+      });
+      const dto: CreateContractFromSlotsDto = {
+        userId: user.id,
+        brandId: brand.id,
+        sku: 'SKU-GIFT-001',
+        clientName: 'Ana',
+        clientPhone: null,
+        clientEmail: null,
+        packages: [{ packageId: pkg.id, quantity: 1, clientRef: 'pkg-1' }],
+        extras: [
+          { extraId: canvas.id, quantity: 1, packageClientRef: 'pkg-1' },
+          {
+            extraId: extraTime.id,
+            quantity: 1,
+            packageClientRef: 'pkg-1',
+            isGift: true,
+          },
+        ],
+      };
+
+      // Act
+      const result = await service.createContract(dto);
+
+      // Assert
+      const gifted = await contractExtrasRepo.findOne({
+        where: { contractId: result.id, extraId: extraTime.id },
+      });
+      const updatedContract = await contractsRepo.findOne({
+        where: { id: result.id },
+      });
+      expect({
+        isGift: gifted?.isGift,
+        basePriceSnapshot: gifted?.basePriceSnapshot,
+        discountPercentageSnapshot: gifted?.discountPercentageSnapshot,
+        finalPriceSnapshot: gifted?.finalPriceSnapshot,
+        promotionId: gifted?.promotionId,
+        total: updatedContract?.total,
+      }).toEqual({
+        isGift: true,
+        basePriceSnapshot: 500,
+        discountPercentageSnapshot: 100,
+        finalPriceSnapshot: 0,
+        promotionId: null,
+        total: 3400,
+      });
+    });
+
+    it('should not let a gifted extra consume a promotion tier', async () => {
+      // Arrange
+      const user = await userFactory.create();
+      const brand = await brandFactory.create();
+      const pkg = await packageFactory.createForBrand(brand, {
+        basePrice: 1000,
+      });
+      const giftExtra = await extraFactory.createForBrand(brand, {
+        price: 300,
+        status: EXTRA_STATUS.ACTIVE,
+      });
+      const paidExtra = await extraFactory.createForBrand(brand, {
+        price: 200,
+        status: EXTRA_STATUS.ACTIVE,
+      });
+      const promotion = await promotionFactory.createForBrand(brand, {
+        status: PROMOTION_STATUS.ACTIVE,
+        type: PROMOTION_TYPE.BONUS,
+        value: 1,
+      });
+      await promotionPackageFactory.createTier(promotion, pkg, 1, 50);
+      const dto: CreateContractFromSlotsDto = {
+        userId: user.id,
+        brandId: brand.id,
+        sku: 'SKU-GIFT-002',
+        clientName: 'Ana',
+        clientPhone: null,
+        clientEmail: null,
+        packages: [{ packageId: pkg.id, quantity: 1, clientRef: 'pkg-1' }],
+        extras: [
+          {
+            extraId: giftExtra.id,
+            quantity: 1,
+            packageClientRef: 'pkg-1',
+            isGift: true,
+          },
+          { extraId: paidExtra.id, quantity: 1, packageClientRef: 'pkg-1' },
+        ],
+      };
+
+      // Act
+      const result = await service.createContract(dto);
+
+      // Assert
+      const paid = await contractExtrasRepo.findOne({
+        where: { contractId: result.id, extraId: paidExtra.id },
+      });
+      expect(paid?.finalPriceSnapshot).toBe(100);
+    });
+  });
+
   describe('createContract with tiered promotions', () => {
     it('should apply tiers in request order and fall back to full price once tiers run out', async () => {
       // Arrange

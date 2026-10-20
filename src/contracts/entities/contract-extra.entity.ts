@@ -59,6 +59,9 @@ export class ContractExtra extends BaseTimeEntity {
   @Column('integer', { default: 1 })
   quantity: number = 1;
 
+  @Column('boolean', { name: 'is_gift', default: false })
+  isGift: boolean = false;
+
   @ManyToOne(() => Contract, (contract) => contract.extras, { nullable: false })
   @JoinColumn({ name: 'contract_id' })
   contract!: Contract;

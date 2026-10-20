@@ -388,7 +388,8 @@ export class ContractsService {
    * `packageClientRef`/`clientRef`, and (b) how many extras were already
    * assigned, in request order, to that same ContractPackage under the same
    * promotion. The client never supplies a discount or promotionId — both are
-   * resolved here.
+   * resolved here. A gifted extra is free, has no promotion and does not
+   * consume a tier position.
    */
   private async setExtras(
     contractExtrasRepo: Repository<ContractExtra>,
@@ -435,7 +436,11 @@ export class ContractsService {
         ? tierMapByPackageId.get(contractPackage.packageId)
         : undefined;
 
-      if (contractPackage && tierInfo) {
+      const isGift = extraInfo.isGift === true;
+
+      if (isGift) {
+        discountPercentage = 100;
+      } else if (contractPackage && tierInfo) {
         const currentCount =
           tierPositionByContractPackage.get(contractPackage.id) ?? 0;
         const nextPosition = currentCount + 1;
@@ -462,6 +467,7 @@ export class ContractsService {
         discountPercentageSnapshot: discountPercentage,
         finalPriceSnapshot: finalPrice,
         quantity: extraInfo.quantity,
+        isGift,
       });
       await contractExtrasRepo.save(extraToSave);
 
