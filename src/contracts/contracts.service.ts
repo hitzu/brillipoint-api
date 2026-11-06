@@ -963,6 +963,9 @@ export class ContractsService {
       await manager.getRepository(ContractPackage).softDelete({ contractId });
       await manager.getRepository(ContractPromotion).softDelete({ contractId });
       await manager.getRepository(Payment).softDelete({ contractId });
+      // Bookings block the agenda through the overlap check, so a removed
+      // contract must release its dates too.
+      await manager.getRepository(Booking).softDelete({ contractId });
 
       const slotIdsArray = Array.from(slotIds);
       if (slotIdsArray.length > 0) {

@@ -2066,6 +2066,43 @@ describe('ContractsService', () => {
       expect(deletedSlot?.deletedAt).not.toBeNull();
     });
 
+    it('should free the agenda by soft-deleting the bookings of the removed contract', async () => {
+      // Arrange
+      const contract = await new ContractFactory(TestDataSource).create();
+      const booking = await bookingFactory.create({ contractId: contract.id });
+
+      // Act
+      await service.removeContract(contract.id);
+
+      // Assert
+      const visibleBooking = await bookingsRepo.findOne({
+        where: { id: booking.id },
+      });
+      expect(visibleBooking).toBeNull();
+    });
+
+    it('should keep the bookings of other contracts when removing one contract', async () => {
+      // Arrange
+      const removed = await new ContractFactory(TestDataSource).create();
+      const kept = await new ContractFactory(TestDataSource).create();
+      await bookingFactory.create({ contractId: removed.id });
+      const keptBooking = await bookingFactory.create({
+        contractId: kept.id,
+        eventDate: '2026-09-13',
+        serviceStartsAt: new Date('2026-09-13T10:00:00.000Z'),
+        serviceEndsAt: new Date('2026-09-13T18:00:00.000Z'),
+      });
+
+      // Act
+      await service.removeContract(removed.id);
+
+      // Assert
+      const stillVisible = await bookingsRepo.findOne({
+        where: { id: keptBooking.id },
+      });
+      expect(stillVisible).not.toBeNull();
+    });
+
     it('should throw NotFoundException if contract is not found', async () => {
       await expect(service.removeContract(999999)).rejects.toBeInstanceOf(
         NotFoundException,
