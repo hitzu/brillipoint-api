@@ -13,8 +13,11 @@ import { AppDataSource as TestDataSource } from '../config/database/data-source'
 import { EXCEPTION_RESPONSE } from '../config/errors/exception-response.config';
 import { EventFactory } from '../../test/factories/events/event.factory';
 import { PhotoFactory } from '../../test/factories/photos/photo.factory';
+import { SessionFactory } from '../../test/factories/photos/session.factory';
 import { Event } from '../events/entities/event.entity';
 import { Photo } from './entities/photo.entity';
+import { Session } from './entities/session.entity';
+import { SessionsCache } from './sessions.cache';
 import { EventsService } from '../events/events.service';
 import { Booking } from '../bookings/entities/booking.entity';
 import { PhotosService } from './photos.service';
@@ -32,8 +35,10 @@ describe('PhotosService', () => {
   let service: PhotosService;
   let eventFactory: EventFactory;
   let photoFactory: PhotoFactory;
+  let sessionFactory: SessionFactory;
   let storageCreateSignedUploadUrl: jest.Mock;
   let storageFrom: jest.Mock;
+  let storageRemove: jest.Mock;
 
   beforeEach(async () => {
     const loggerMock = {
@@ -44,8 +49,10 @@ describe('PhotosService', () => {
       debug: jest.fn(),
     };
     storageCreateSignedUploadUrl = jest.fn();
+    storageRemove = jest.fn().mockResolvedValue({ error: null });
     storageFrom = jest.fn(() => ({
       createSignedUploadUrl: storageCreateSignedUploadUrl,
+      remove: storageRemove,
     }));
     (createClient as jest.Mock).mockReturnValue({
       storage: {
@@ -84,6 +91,11 @@ describe('PhotosService', () => {
           useValue: TestDataSource.getRepository(Photo),
         },
         {
+          provide: getRepositoryToken(Session),
+          useValue: TestDataSource.getRepository(Session),
+        },
+        SessionsCache,
+        {
           provide: getRepositoryToken(Event),
           useValue: TestDataSource.getRepository(Event),
         },
@@ -105,6 +117,7 @@ describe('PhotosService', () => {
     service = module.get<PhotosService>(PhotosService);
     eventFactory = new EventFactory(TestDataSource);
     photoFactory = new PhotoFactory(TestDataSource);
+    sessionFactory = new SessionFactory(TestDataSource);
   });
 
   describe('listByEventToken', () => {
@@ -367,6 +380,98 @@ describe('PhotosService', () => {
           `https://test.supabase.co/storage/v1/object/public/prod/` +
           `devoted/event_${event.id}/uuid-123.jpg`,
       });
+    });
+  });
+
+  describe('remove', () => {
+    it('deletes the photo row and removes both files from its bucket', async () => {
+      const photo = await photoFactory.create({
+        storagePath: 'photobooth/1/a.jpg',
+        minimizedStoragePath: 'photobooth/1/minimized/a.jpg',
+        publicUrl:
+          'https://test.supabase.co/storage/v1/object/public/prod/photobooth/1/a.jpg',
+      });
+
+      await service.remove(photo.id);
+
+      expect(storageFrom).toHaveBeenCalledWith('prod');
+      expect(storageRemove).toHaveBeenCalledWith([
+        'photobooth/1/a.jpg',
+        'photobooth/1/minimized/a.jpg',
+      ]);
+      const row = await TestDataSource.getRepository(Photo).findOne({
+        where: { id: photo.id },
+        withDeleted: true,
+      });
+      expect(row).toBeNull();
+    });
+
+    it('deletes a completed session when its last photo is removed', async () => {
+      const event = await eventFactory.create();
+      const session = await sessionFactory.create({ eventId: event.id, status: 'complete', photoCount: 1 });
+      const photo = await photoFactory.create({
+        eventId: event.id,
+        sessionId: session.id,
+      });
+
+      await service.remove(photo.id);
+
+      const row = await TestDataSource.getRepository(Session).findOne({
+        where: { id: session.id },
+        withDeleted: true,
+      });
+      expect(row).toBeNull();
+    });
+
+    it('keeps the session and decrements photoCount when photos remain', async () => {
+      const event = await eventFactory.create();
+      const session = await sessionFactory.create({ eventId: event.id, status: 'complete', photoCount: 2 });
+      const photo = await photoFactory.create({
+        eventId: event.id,
+        sessionId: session.id,
+      });
+      await photoFactory.create({
+        eventId: event.id,
+        sessionId: session.id,
+        storagePath: 'other.jpg',
+      });
+
+      await service.remove(photo.id);
+
+      const row = await TestDataSource.getRepository(Session).findOneByOrFail({
+        id: session.id,
+      });
+      expect(row.photoCount).toBe(1);
+    });
+
+    it('keeps an active session even when it has no photos left', async () => {
+      const event = await eventFactory.create();
+      const session = await sessionFactory.create({ eventId: event.id, status: 'active', photoCount: 1 });
+      const photo = await photoFactory.create({
+        eventId: event.id,
+        sessionId: session.id,
+      });
+
+      await service.remove(photo.id);
+
+      const row = await TestDataSource.getRepository(Session).findOneByOrFail({
+        id: session.id,
+      });
+      expect(row.photoCount).toBe(0);
+    });
+
+    it('still succeeds when Supabase removal fails', async () => {
+      const photo = await photoFactory.create();
+      storageRemove.mockResolvedValue({ error: new Error('boom') });
+
+      await expect(service.remove(photo.id)).resolves.toBeUndefined();
+    });
+
+    it('throws NotFoundException and touches no storage for unknown id', async () => {
+      await expect(service.remove(999999)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(storageRemove).not.toHaveBeenCalled();
     });
   });
 });

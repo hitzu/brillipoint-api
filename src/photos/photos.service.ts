@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -16,6 +17,9 @@ import { ListPhotosResponseDto } from './dto/list-photos-response.dto';
 import { PhotoResponseDto } from './dto/photo-response.dto';
 import { PresignResponseDto } from './dto/presign-response.dto';
 import { Photo } from './entities/photo.entity';
+import { Session } from './entities/session.entity';
+import { SessionsCache } from './sessions.cache';
+import { PhotoStatus } from './enums/index';
 import { EventsService } from '../events/events.service';
 
 type PhotoCursor = {
@@ -34,6 +38,7 @@ type EventPresignSegment = 'personalized' | 'devoted';
 
 @Injectable()
 export class PhotosService {
+  private readonly logger = new Logger(PhotosService.name);
   private _client:
     | ReturnType<typeof createClient>
     | undefined;
@@ -41,6 +46,9 @@ export class PhotosService {
   constructor(
     @InjectRepository(Photo)
     private readonly photoRepository: Repository<Photo>,
+    @InjectRepository(Session)
+    private readonly sessionRepository: Repository<Session>,
+    private readonly cache: SessionsCache,
     private readonly eventsService: EventsService,
     private readonly configService: ConfigService,
   ) { }
@@ -310,9 +318,91 @@ export class PhotosService {
   }
 
   async remove(id: number): Promise<void> {
-    const result = await this.photoRepository.softDelete(id);
-    if (result.affected === 0) {
+    const photo = await this.photoRepository.findOne({ where: { id } });
+    if (!photo) {
       throw new NotFoundException('Photo not found');
     }
+
+    await this.photoRepository.delete(id);
+    await this.removeFromStorage(photo);
+    await this.syncSessionAfterPhotoRemoval(photo);
+  }
+
+  /**
+   * Keeps the session consistent after one of its photos is gone: the cached
+   * `photoCount` goes down and, once a completed session has no photos left,
+   * the session itself is removed. Active sessions are kept because the cabin
+   * may still be uploading into them.
+   */
+  private async syncSessionAfterPhotoRemoval(photo: Photo): Promise<void> {
+    if (!photo.sessionId) {
+      return;
+    }
+    const session = await this.sessionRepository.findOne({
+      where: { id: photo.sessionId },
+      relations: ['event'],
+    });
+    if (!session) {
+      return;
+    }
+
+    const remaining = await this.photoRepository.count({
+      where: { sessionId: session.id },
+    });
+
+    if (remaining === 0 && session.status === 'complete') {
+      await this.sessionRepository.delete(session.id);
+    } else if (photo.status === PhotoStatus.READY && session.photoCount > 0) {
+      await this.sessionRepository.decrement(
+        { id: session.id },
+        'photoCount',
+        1,
+      );
+    }
+
+    this.cache.invalidateSession(session.sessionToken);
+    if (session.event) {
+      this.cache.invalidateGallery(session.event.token);
+    }
+  }
+
+  /**
+   * Best effort: the DB soft delete is the source of truth, so a Supabase
+   * failure is logged (orphan file) instead of failing the request.
+   */
+  private async removeFromStorage(photo: Photo): Promise<void> {
+    const paths = [photo.storagePath, photo.minimizedStoragePath].filter(
+      (p): p is string => !!p,
+    );
+    if (paths.length === 0) {
+      return;
+    }
+
+    try {
+      const { error } = await this.client.storage
+        .from(this.resolvePhotoBucket(photo))
+        .remove(paths);
+      if (error) {
+        throw error;
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to remove storage objects for photo ${photo.id}: ${String(error)}`,
+      );
+    }
+  }
+
+  /** Bucket from the stored public URL; falls back to the stage bucket. */
+  private resolvePhotoBucket(photo: Photo): string {
+    const match = photo.publicUrl?.match(/\/object\/public\/([^/]+)\//);
+    if (match) {
+      return match[1];
+    }
+    const stage = (
+      this.configService.get<string>('STAGE') ??
+      this.configService.get<string>('NODE_ENV') ??
+      'local'
+    ).toLowerCase();
+    return stage === 'production' || stage === 'prod' ? 'prod' : 'local';
   }
 }

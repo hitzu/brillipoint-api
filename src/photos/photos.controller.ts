@@ -127,9 +127,9 @@ export class PhotosController {
   @Public()
   @Photobooth()
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Remove (soft delete) a photo by ID' })
+  @ApiOperation({ summary: 'Permanently remove a photo by ID (DB row and Supabase files)' })
   @ApiParam({ name: 'id', type: Number, description: 'Photo ID' })
-  @ApiNoContentResponse({ description: 'Photo deleted (soft delete)' })
+  @ApiNoContentResponse({ description: 'Photo deleted' })
   @ApiNotFoundResponse({ description: 'Photo not found' })
   async publicRemove(@Param('id') id: string) {
     await this.photosService.remove(+id);
@@ -137,9 +137,9 @@ export class PhotosController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Remove (soft delete) a photo by ID' })
+  @ApiOperation({ summary: 'Permanently remove a photo by ID (DB row and Supabase files)' })
   @ApiParam({ name: 'id', type: Number, description: 'Photo ID' })
-  @ApiNoContentResponse({ description: 'Photo deleted (soft delete)' })
+  @ApiNoContentResponse({ description: 'Photo deleted' })
   @ApiNotFoundResponse({ description: 'Photo not found' })
   async remove(@Param('id') id: string) {
     await this.photosService.remove(+id);
