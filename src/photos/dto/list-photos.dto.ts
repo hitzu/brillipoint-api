@@ -7,7 +7,7 @@ export class ListPhotosQueryDto {
     type: Number,
     default: 20,
     minimum: 1,
-    maximum: 100,
+    maximum: 500,
     description: 'Maximum number of photos to return',
   })
   @IsOptional()
