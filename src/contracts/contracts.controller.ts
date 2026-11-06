@@ -31,6 +31,7 @@ import { AddItemDto } from './dto/add-item.dto';
 import { ContractDetailDto } from './dto/contract-detail.dto';
 import { CreateContractFromSlotsDto } from './dto/create-contract-from-slots.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
+import { UpdateTransportDto } from './dto/update-transport.dto';
 import { ContractDto } from './dto/contract.dto';
 import { ListContractsQueryDto } from './dto/list-contracts-query.dto';
 import { Public } from '../auth/decorators/public.decorator';
@@ -256,6 +257,18 @@ export class ContractsController {
     @Param('id', ParseIntPipe) id: number,
   ): Promise<PaymentDto[]> {
     return await this.contractsService.listPayments(id);
+  }
+
+  @Patch(':id/transport')
+  @ApiParam({ name: 'id', type: Number })
+  @ApiBody({ type: UpdateTransportDto })
+  @ApiOkResponse({ type: ContractDetailDto })
+  async updateTransport(
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ValidationPipe({ transform: true, whitelist: true }))
+    dto: UpdateTransportDto,
+  ): Promise<ContractDetailDto> {
+    return await this.contractsService.updateTransport(id, dto);
   }
 
   @Post(':id/cancel')

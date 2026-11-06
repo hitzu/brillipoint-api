@@ -42,6 +42,11 @@ export class ContractDetailDto {
   @IsNumber()
   paidAmount!: number;
 
+  /** `total + transportAmount - paidAmount`, never below zero. */
+  @Expose()
+  @IsNumber()
+  balanceDue!: number;
+
   @Expose()
   @IsArray()
   @Type(() => ContractSlotDto)

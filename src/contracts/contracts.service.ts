@@ -21,6 +21,8 @@ import { ContractDetailDto } from './dto/contract-detail.dto';
 import { CreateContractFromSlotsDto } from './dto/create-contract-from-slots.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 import { CONTRACT_STATUS } from './types/contract-status.types';
+import { CONTRACT_TRANSPORT_STATUS } from './types/contract-transport-status.types';
+import { UpdateTransportDto } from './dto/update-transport.dto';
 import { ContractExtra } from './entities/contract-extra.entity';
 import { EXTRA_PRODUCT_ACTION } from '../extras/types/extra-product-action.types';
 import {
@@ -621,6 +623,44 @@ export class ContractsService {
     });
   }
 
+  private computeBalanceDue(contract: Contract, paidAmount: number): number {
+    const transport =
+      contract.transportStatus === CONTRACT_TRANSPORT_STATUS.QUOTED
+        ? Number(contract.transportAmount ?? 0)
+        : 0;
+    return Math.max(0, Number(contract.total ?? 0) + transport - paidAmount);
+  }
+
+  async updateTransport(
+    contractId: number,
+    dto: UpdateTransportDto,
+  ): Promise<ContractDetailDto> {
+    const contract = await this.contractsRepository.findOne({
+      where: { id: contractId },
+    });
+    if (!contract) {
+      throw new NotFoundException('Contract not found');
+    }
+    if (contract.status === CONTRACT_STATUS.CANCELLED) {
+      throw new ConflictException('Contract is cancelled');
+    }
+    const isQuoted = dto.status === CONTRACT_TRANSPORT_STATUS.QUOTED;
+    if (isQuoted && !(dto.amount && dto.amount > 0)) {
+      throw new BadRequestException(
+        'amount must be greater than 0 when transport is quoted',
+      );
+    }
+    if (!isQuoted && dto.amount !== undefined) {
+      throw new BadRequestException('amount is only allowed when quoted');
+    }
+    await this.contractsRepository.update(contractId, {
+      transportStatus: dto.status,
+      transportAmount: isQuoted ? dto.amount : null,
+      transportQuotedAt: isQuoted ? new Date() : null,
+    });
+    return await this.getDetail(contractId);
+  }
+
   private async sumPayments(contractId: number): Promise<number> {
     const payments =
       await this.paymentsService.listPaymentsByContract(contractId);
@@ -662,6 +702,7 @@ export class ContractsService {
         extras: extras.map((extra) => this.withExtraDeliverables(extra)),
         payments,
         paidAmount,
+        balanceDue: this.computeBalanceDue(contract, paidAmount),
         bookings,
       },
       { excludeExtraneousValues: true },
@@ -821,6 +862,7 @@ export class ContractsService {
         extras: extras.map((extra) => this.withExtraDeliverables(extra)),
         payments,
         paidAmount,
+        balanceDue: this.computeBalanceDue(contract, paidAmount),
         bookings,
       },
       { excludeExtraneousValues: true },

@@ -17,6 +17,7 @@ import { ContractPackage } from './contract-package.entity';
 import { Slot } from '../../slots/entities/slot.entity';
 import { ContractPromotion } from './contract-promotion.entity';
 import { CONTRACT_STATUS } from '../types/contract-status.types';
+import { CONTRACT_TRANSPORT_STATUS } from '../types/contract-transport-status.types';
 import { ContractSlot } from './contract-slot.entity';
 import { User } from '../../users/entities/user.entity';
 import { Event } from '../../events/entities/event.entity';
@@ -71,6 +72,31 @@ export class Contract extends BaseTimeEntity {
     nullable: true,
   })
   total: number | null = null;
+
+  /**
+   * Transport is NOT part of the contract snapshot: `total` stays what the
+   * client signed. The quoted amount is added on top when computing the balance.
+   */
+  @Column('enum', {
+    name: 'transport_status',
+    enum: CONTRACT_TRANSPORT_STATUS,
+    default: CONTRACT_TRANSPORT_STATUS.PENDING_QUOTE,
+  })
+  transportStatus: CONTRACT_TRANSPORT_STATUS =
+    CONTRACT_TRANSPORT_STATUS.PENDING_QUOTE;
+
+  @Column('decimal', {
+    name: 'transport_amount',
+    transformer: {
+      to: (value: number | null) => value,
+      from: (value: string | null) => (value == null ? null : Number(value)),
+    },
+    nullable: true,
+  })
+  transportAmount: number | null = null;
+
+  @Column('timestamptz', { name: 'transport_quoted_at', nullable: true })
+  transportQuotedAt: Date | null = null;
 
   @Column('text')
   sku!: string;

@@ -52,6 +52,9 @@ import { EXTRA_STATUS } from '../extras/types/extras-status.types';
 import { Booking } from '../bookings/entities/booking.entity';
 import { BOOKING_STATUS } from '../bookings/constants/booking_status.enum';
 import { BookingFactory } from '../../test/factories/bookings/booking.factory';
+import { ContractFactory } from '../../test/factories/contracts/contract.factory';
+import { PaymentFactory } from '../../test/factories/contracts/payment.factory';
+import { CONTRACT_TRANSPORT_STATUS } from './types/contract-transport-status.types';
 
 describe('ContractsService', () => {
   let service: ContractsService;
@@ -2067,6 +2070,161 @@ describe('ContractsService', () => {
       await expect(service.removeContract(999999)).rejects.toBeInstanceOf(
         NotFoundException,
       );
+    });
+  });
+  describe('updateTransport', () => {
+    it('should default a new contract to pending_quote without adding to the balance', async () => {
+      // Arrange
+      const contract = await new ContractFactory(TestDataSource).create({
+        total: 2000,
+      });
+
+      // Act
+      const detail = await service.getDetail(contract.id);
+
+      // Assert
+      expect(detail.contract.transportStatus).toBe(
+        CONTRACT_TRANSPORT_STATUS.PENDING_QUOTE,
+      );
+      expect(detail.balanceDue).toBe(2000);
+    });
+
+    it('should add the quoted amount to the balance without changing the contract total', async () => {
+      // Arrange
+      const contract = await new ContractFactory(TestDataSource).create({
+        total: 2000,
+      });
+      await new PaymentFactory(TestDataSource).createForContract(contract, {
+        amount: 700,
+      });
+
+      // Act
+      const detail = await service.updateTransport(contract.id, {
+        status: CONTRACT_TRANSPORT_STATUS.QUOTED,
+        amount: 500,
+      });
+
+      // Assert
+      expect(detail.balanceDue).toBe(1800);
+      expect(detail.contract.total).toBe(2000);
+      expect(detail.contract.transportAmount).toBe(500);
+    });
+
+    it('should not add transport to the balance when it is included', async () => {
+      // Arrange
+      const contract = await new ContractFactory(TestDataSource).create({
+        total: 2000,
+      });
+      await new PaymentFactory(TestDataSource).createForContract(contract, {
+        amount: 700,
+      });
+
+      // Act
+      const detail = await service.updateTransport(contract.id, {
+        status: CONTRACT_TRANSPORT_STATUS.INCLUDED,
+      });
+
+      // Assert
+      expect(detail.balanceDue).toBe(1300);
+    });
+
+    it('should clear the amount when a quoted transport goes back to included', async () => {
+      // Arrange
+      const contract = await new ContractFactory(TestDataSource).create({
+        total: 2000,
+      });
+      await service.updateTransport(contract.id, {
+        status: CONTRACT_TRANSPORT_STATUS.QUOTED,
+        amount: 500,
+      });
+
+      // Act
+      const detail = await service.updateTransport(contract.id, {
+        status: CONTRACT_TRANSPORT_STATUS.INCLUDED,
+      });
+
+      // Assert
+      expect(detail.contract.transportAmount).toBeNull();
+    });
+
+    it('should expose balanceDue on the public token detail', async () => {
+      // Arrange
+      const contract = await new ContractFactory(TestDataSource).create({
+        total: 2000,
+        clientPhone: '5512345678',
+        clientEmail: 'ana@example.com',
+      });
+      await service.updateTransport(contract.id, {
+        status: CONTRACT_TRANSPORT_STATUS.QUOTED,
+        amount: 300,
+      });
+
+      // Act
+      const detail = await service.getDetailByToken(contract.token);
+
+      // Assert
+      expect(detail.balanceDue).toBe(2300);
+    });
+
+    it('should reject a quoted transport without an amount', async () => {
+      // Arrange
+      const contract = await new ContractFactory(TestDataSource).create();
+
+      // Act & Assert
+      await expect(
+        service.updateTransport(contract.id, {
+          status: CONTRACT_TRANSPORT_STATUS.QUOTED,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('should reject a quoted transport with a zero amount', async () => {
+      // Arrange
+      const contract = await new ContractFactory(TestDataSource).create();
+
+      // Act & Assert
+      await expect(
+        service.updateTransport(contract.id, {
+          status: CONTRACT_TRANSPORT_STATUS.QUOTED,
+          amount: 0,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('should reject an amount when the transport is not quoted', async () => {
+      // Arrange
+      const contract = await new ContractFactory(TestDataSource).create();
+
+      // Act & Assert
+      await expect(
+        service.updateTransport(contract.id, {
+          status: CONTRACT_TRANSPORT_STATUS.INCLUDED,
+          amount: 100,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('should throw if the contract is not found', async () => {
+      // Act & Assert
+      await expect(
+        service.updateTransport(999999, {
+          status: CONTRACT_TRANSPORT_STATUS.INCLUDED,
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('should throw if the contract is cancelled', async () => {
+      // Arrange
+      const contract = await new ContractFactory(TestDataSource).create({
+        status: CONTRACT_STATUS.CANCELLED,
+      });
+
+      // Act & Assert
+      await expect(
+        service.updateTransport(contract.id, {
+          status: CONTRACT_TRANSPORT_STATUS.INCLUDED,
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
     });
   });
 });

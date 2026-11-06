@@ -9,6 +9,7 @@ import {
 } from 'class-validator';
 
 import { CONTRACT_STATUS } from '../types/contract-status.types';
+import { CONTRACT_TRANSPORT_STATUS } from '../types/contract-transport-status.types';
 import { ContractBookingSummaryDto } from './contract-booking-summary.dto';
 
 export class ContractDto {
@@ -53,6 +54,15 @@ export class ContractDto {
   @IsOptional()
   @IsNumber()
   total?: number | null;
+
+  @Expose()
+  @IsEnum(CONTRACT_TRANSPORT_STATUS)
+  transportStatus!: CONTRACT_TRANSPORT_STATUS;
+
+  @Expose()
+  @IsOptional()
+  @IsNumber()
+  transportAmount?: number | null;
 
   @Expose()
   @IsOptional()
