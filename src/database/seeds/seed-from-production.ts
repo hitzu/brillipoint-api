@@ -11,8 +11,11 @@ import {
   IncludedTable,
   SanitizationContext,
   SeedRow,
+  DEV_USER_EMAIL,
   assertLocalTarget,
+  buildDevUser,
   buildRowFilter,
+  findUnreadableTables,
   TargetColumn,
   reconcileTableSchema,
   sanitizeRow,
@@ -221,6 +224,30 @@ async function readSchema(
 interface SchemaReport {
   skippedTables: Set<string>;
   defaultedColumns: Map<string, string[]>;
+  fallbackColumns: Map<string, Record<string, unknown>>;
+}
+
+// information_schema hides tables the role cannot read, which makes them look
+// absent; pg_class lists them regardless, so a missing grant fails loudly.
+async function assertSourceReadable(source: QueryRunner): Promise<void> {
+  const access = (await source.query(
+    `
+      SELECT c.relname AS name, has_table_privilege(c.oid, 'SELECT') AS "canSelect"
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public'
+        AND c.relkind IN ('r', 'p')
+        AND c.relname = ANY($1::text[])
+    `,
+    [[...INCLUDED_TABLES]],
+  )) as Array<{ name: string; canSelect: boolean }>;
+
+  const unreadable = findUnreadableTables(access, INCLUDED_TABLES);
+  if (unreadable.length > 0) {
+    throw new Error(
+      `The source role cannot SELECT from existing table(s): ${unreadable.join(', ')}. Grant read access (for example GRANT pg_read_all_data TO <seed role>).`,
+    );
+  }
 }
 
 async function reconcileSchemas(
@@ -235,6 +262,7 @@ async function reconcileSchemas(
   const report: SchemaReport = {
     skippedTables: new Set(),
     defaultedColumns: new Map(),
+    fallbackColumns: new Map(),
   };
   for (const table of ALL_TABLES) {
     const result = reconcileTableSchema(
@@ -245,10 +273,15 @@ async function reconcileSchemas(
     if (result.status === 'skipped') {
       report.skippedTables.add(table);
       console.warn(
-        `Warning: table "${table}" is absent or not readable in the source; it will be empty in the target.`,
+        `Warning: table "${table}" is absent from the source; it will be empty in the target.`,
       );
-    } else if (result.defaultedColumns.length > 0) {
-      report.defaultedColumns.set(table, result.defaultedColumns);
+    } else {
+      if (result.defaultedColumns.length > 0) {
+        report.defaultedColumns.set(table, result.defaultedColumns);
+      }
+      if (result.fallbackColumns) {
+        report.fallbackColumns.set(table, result.fallbackColumns);
+      }
     }
   }
   return report;
@@ -358,6 +391,7 @@ async function copyTable(
   slotIds: number[],
   context: SanitizationContext,
   batchSize: number,
+  fallbackColumns: Record<string, unknown> = {},
 ): Promise<number> {
   const filter = buildRowFilter(table, contractIds, slotIds);
   let lastId = 0;
@@ -384,7 +418,10 @@ async function copyTable(
     await insertRows(
       target,
       table,
-      rows.map((row) => sanitizeRow(table, row, context)),
+      rows.map((row) => ({
+        ...sanitizeRow(table, row, context),
+        ...fallbackColumns,
+      })),
     );
     lastId = Number(rows[rows.length - 1].id);
     copied += rows.length;
@@ -448,6 +485,29 @@ async function auditTarget(target: QueryRunner): Promise<void> {
   }
 }
 
+async function ensureDevUser(
+  target: QueryRunner,
+  passwordHash: string,
+): Promise<void> {
+  const user = buildDevUser(passwordHash);
+  const { email, ...values } = user;
+  const columns = Object.keys(values);
+  const existing = (await target.query(
+    'SELECT id FROM users WHERE email = $1 ORDER BY id LIMIT 1',
+    [email],
+  )) as Array<{ id: number }>;
+
+  if (existing.length === 0) {
+    await insertRows(target, 'users', [user]);
+    return;
+  }
+
+  await target.query(
+    `UPDATE users SET ${columns.map((column, index) => `${quoteIdentifier(column)} = $${index + 2}`).join(', ')} WHERE id = $1`,
+    [existing[0].id, ...columns.map((column) => values[column])],
+  );
+}
+
 function printHelp(): void {
   console.log(`
 Usage:
@@ -463,11 +523,16 @@ Optional environment variables:
 
 The target uses the existing local SUPABASE_DB_URL or DB_* configuration.
 The source may be behind the local schema: tables missing from the source are
-skipped, and target-only columns must be nullable or have a default. A source
-with columns the target lacks still aborts.
+skipped, and target-only columns must be nullable, have a default, or declare a
+fallback in REQUIRED_COLUMN_POLICY. A source with columns the target lacks
+still aborts.
 
-Source role grants: SELECT on the included tables and at least REFERENCES on
-the excluded ones (otherwise they are invisible and treated as absent).
+Source role grants: SELECT on every included table (for example
+GRANT pg_read_all_data TO <seed role>, PostgreSQL 14+). A table that exists but
+cannot be read aborts the seed; only a table absent from the source is skipped.
+
+The seed always leaves an admin ${DEV_USER_EMAIL} in the target, with the
+password from SEED_LOCAL_PASSWORD, even when the copy fails.
 
 Only loopback targets are accepted. Production credentials are never logged.
 `);
@@ -489,6 +554,7 @@ export async function run(): Promise<void> {
     );
   }
 
+  const passwordHash = await hash(localPassword, 12);
   const contractLimit = parsePositiveInteger(
     process.env.SEED_CONTRACT_LIMIT,
     DEFAULT_CONTRACT_LIMIT,
@@ -504,6 +570,7 @@ export async function run(): Promise<void> {
   const target = targetConfiguration.dataSource;
   let sourceRunner: QueryRunner | undefined;
   let targetRunner: QueryRunner | undefined;
+  let targetConfirmed = false;
 
   try {
     await Promise.all([source.initialize(), target.initialize()]);
@@ -521,6 +588,8 @@ export async function run(): Promise<void> {
       database: targetIdentity.database,
     });
     await confirmTarget(targetIdentity.database);
+    targetConfirmed = true;
+    await assertSourceReadable(sourceRunner);
     const schemaReport = await reconcileSchemas(sourceRunner, targetRunner);
 
     await sourceRunner.startTransaction('REPEATABLE READ');
@@ -535,7 +604,6 @@ export async function run(): Promise<void> {
     const contractIds = await selectContractIds(sourceRunner, contractLimit);
     const slotIds = await selectSlotIds(sourceRunner, contractIds);
     const dateShiftDays = await calculateDateShiftDays(sourceRunner, slotIds);
-    const passwordHash = await hash(localPassword, 12);
     const context: SanitizationContext = { passwordHash, dateShiftDays };
 
     await targetRunner.startTransaction('SERIALIZABLE');
@@ -556,12 +624,14 @@ export async function run(): Promise<void> {
         slotIds,
         context,
         batchSize,
+        schemaReport.fallbackColumns.get(table),
       );
       await resetSequence(targetRunner, table);
       counts.set(table, count);
     }
 
     await auditTarget(targetRunner);
+    await ensureDevUser(targetRunner, passwordHash);
     await targetRunner.commitTransaction();
     await sourceRunner.rollbackTransaction();
 
@@ -581,12 +651,26 @@ export async function run(): Promise<void> {
         `Filled by target default in ${table}: ${columns.join(', ')}`,
       );
     }
+    for (const [table, columns] of schemaReport.fallbackColumns) {
+      console.log(
+        `Filled by seed fallback in ${table}: ${Object.keys(columns).join(', ')}`,
+      );
+    }
+    console.log(`Dev user: ${DEV_USER_EMAIL}`);
   } catch (error) {
     if (targetRunner?.isTransactionActive) {
       await targetRunner.rollbackTransaction();
     }
     if (sourceRunner?.isTransactionActive) {
       await sourceRunner.rollbackTransaction();
+    }
+    if (targetConfirmed && targetRunner) {
+      try {
+        await ensureDevUser(targetRunner, passwordHash);
+        console.error(`Dev user ${DEV_USER_EMAIL} kept despite the failure.`);
+      } catch {
+        // The original failure is the one worth reporting.
+      }
     }
     throw error;
   } finally {
