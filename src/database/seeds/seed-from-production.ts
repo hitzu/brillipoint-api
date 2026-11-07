@@ -13,7 +13,8 @@ import {
   SeedRow,
   assertLocalTarget,
   buildRowFilter,
-  compareSchemaColumns,
+  TargetColumn,
+  reconcileTableSchema,
   sanitizeRow,
 } from './production-seed';
 
@@ -181,51 +182,76 @@ async function confirmTarget(database: string): Promise<void> {
   }
 }
 
-async function readSchema(runner: QueryRunner): Promise<Map<string, string[]>> {
+async function readSchema(
+  runner: QueryRunner,
+): Promise<Map<string, TargetColumn[]>> {
   const rows = (await runner.query(
     `
-      SELECT table_name, column_name
+      SELECT table_name, column_name,
+        is_nullable = 'YES' AS nullable,
+        (column_default IS NOT NULL
+          OR is_identity = 'YES'
+          OR is_generated = 'ALWAYS') AS has_default
       FROM information_schema.columns
       WHERE table_schema = 'public'
         AND table_name = ANY($1::text[])
       ORDER BY table_name, ordinal_position
     `,
     [ALL_TABLES],
-  )) as Array<{ table_name: string; column_name: string }>;
+  )) as Array<{
+    table_name: string;
+    column_name: string;
+    nullable: boolean;
+    has_default: boolean;
+  }>;
 
-  const schema = new Map<string, string[]>();
+  const schema = new Map<string, TargetColumn[]>();
   for (const row of rows) {
     const columns = schema.get(row.table_name) ?? [];
-    columns.push(row.column_name);
+    columns.push({
+      name: row.column_name,
+      nullable: row.nullable,
+      hasDefault: row.has_default,
+    });
     schema.set(row.table_name, columns);
   }
   return schema;
 }
 
-async function assertCompatibleSchemas(
+interface SchemaReport {
+  skippedTables: Set<string>;
+  defaultedColumns: Map<string, string[]>;
+}
+
+async function reconcileSchemas(
   source: QueryRunner,
   target: QueryRunner,
-): Promise<void> {
+): Promise<SchemaReport> {
   const [sourceSchema, targetSchema] = await Promise.all([
     readSchema(source),
     readSchema(target),
   ]);
 
+  const report: SchemaReport = {
+    skippedTables: new Set(),
+    defaultedColumns: new Map(),
+  };
   for (const table of ALL_TABLES) {
-    const sourceColumns = sourceSchema.get(table);
-    const targetColumns = targetSchema.get(table);
-    if (!sourceColumns || !targetColumns) {
-      throw new Error(
-        `Table "${table}" is missing from ${sourceColumns ? 'target' : 'source'} schema. Run migrations first.`,
+    const result = reconcileTableSchema(
+      table,
+      sourceSchema.get(table)?.map((column) => column.name),
+      targetSchema.get(table),
+    );
+    if (result.status === 'skipped') {
+      report.skippedTables.add(table);
+      console.warn(
+        `Warning: table "${table}" is absent or not readable in the source; it will be empty in the target.`,
       );
-    }
-    const difference = compareSchemaColumns(sourceColumns, targetColumns);
-    if (difference.sourceOnly.length > 0 || difference.targetOnly.length > 0) {
-      throw new Error(
-        `Source and target columns differ for "${table}". Source-only: [${difference.sourceOnly.join(', ')}]. Target-only: [${difference.targetOnly.join(', ')}]. Run the same migrations on both databases.`,
-      );
+    } else if (result.defaultedColumns.length > 0) {
+      report.defaultedColumns.set(table, result.defaultedColumns);
     }
   }
+  return report;
 }
 
 async function selectContractIds(
@@ -436,6 +462,13 @@ Optional environment variables:
   SEED_CONFIRM_TARGET=<name>  Non-interactive confirmation of the local database name
 
 The target uses the existing local SUPABASE_DB_URL or DB_* configuration.
+The source may be behind the local schema: tables missing from the source are
+skipped, and target-only columns must be nullable or have a default. A source
+with columns the target lacks still aborts.
+
+Source role grants: SELECT on the included tables and at least REFERENCES on
+the excluded ones (otherwise they are invisible and treated as absent).
+
 Only loopback targets are accepted. Production credentials are never logged.
 `);
 }
@@ -488,7 +521,7 @@ export async function run(): Promise<void> {
       database: targetIdentity.database,
     });
     await confirmTarget(targetIdentity.database);
-    await assertCompatibleSchemas(sourceRunner, targetRunner);
+    const schemaReport = await reconcileSchemas(sourceRunner, targetRunner);
 
     await sourceRunner.startTransaction('REPEATABLE READ');
     await sourceRunner.query('SET TRANSACTION READ ONLY');
@@ -512,6 +545,9 @@ export async function run(): Promise<void> {
 
     const counts = new Map<IncludedTable, number>();
     for (const table of INCLUDED_TABLES) {
+      if (schemaReport.skippedTables.has(table)) {
+        continue;
+      }
       const count = await copyTable(
         sourceRunner,
         targetRunner,
@@ -534,6 +570,16 @@ export async function run(): Promise<void> {
     console.log(`Date shift: ${dateShiftDays} day(s)`);
     for (const [table, count] of counts) {
       console.log(`${table}: ${count}`);
+    }
+    if (schemaReport.skippedTables.size > 0) {
+      console.log(
+        `Skipped tables (absent in source): ${[...schemaReport.skippedTables].join(', ')}`,
+      );
+    }
+    for (const [table, columns] of schemaReport.defaultedColumns) {
+      console.log(
+        `Filled by target default in ${table}: ${columns.join(', ')}`,
+      );
     }
   } catch (error) {
     if (targetRunner?.isTransactionActive) {

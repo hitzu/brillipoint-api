@@ -281,6 +281,54 @@ export function compareSchemaColumns(
   };
 }
 
+export interface TargetColumn {
+  name: string;
+  nullable: boolean;
+  hasDefault: boolean;
+}
+
+export type TableReconciliation =
+  | { status: 'skipped' }
+  | { status: 'copy'; defaultedColumns: string[] };
+
+export function reconcileTableSchema(
+  table: string,
+  sourceColumns: string[] | undefined,
+  targetColumns: TargetColumn[] | undefined,
+): TableReconciliation {
+  if (!targetColumns) {
+    throw new Error(
+      `Table "${table}" is missing from target schema. Run migrations first.`,
+    );
+  }
+  if (!sourceColumns) {
+    return { status: 'skipped' };
+  }
+
+  const difference = compareSchemaColumns(
+    sourceColumns,
+    targetColumns.map((column) => column.name),
+  );
+  if (difference.sourceOnly.length > 0) {
+    throw new Error(
+      `Source has columns the target lacks for "${table}". Source-only: [${difference.sourceOnly.join(', ')}]. Run the same migrations as the source on the target.`,
+    );
+  }
+
+  const targetOnly = new Set(difference.targetOnly);
+  const missing = targetColumns.filter(
+    (column) =>
+      targetOnly.has(column.name) && !column.nullable && !column.hasDefault,
+  );
+  if (missing.length > 0) {
+    throw new Error(
+      `Target-only column ${missing.map((column) => `"${table}"."${column.name}"`).join(', ')} is NOT NULL without a default, so it cannot be left unset.`,
+    );
+  }
+
+  return { status: 'copy', defaultedColumns: difference.targetOnly };
+}
+
 export function assertLocalTarget(target: LocalTarget): void {
   if (['production', 'prod'].includes(target.stage.toLowerCase())) {
     throw new Error(
