@@ -2,10 +2,11 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
-import { QueryFailedError, Repository } from 'typeorm';
+import { In, QueryFailedError, Repository } from 'typeorm';
 
 import {
   ConfirmSessionVideoDto,
+  SessionVideoItemDto,
   SessionVideoPresignedResponseDto,
 } from './dto/session-video.dto';
 import { SessionVideo } from './entities/session-video.entity';
@@ -80,11 +81,36 @@ export class SessionVideosService {
     }
 
     this.cache.invalidateSession(session.sessionToken);
+    if (session.event?.token) this.cache.invalidateGallery(session.event.token);
     return { ok: true };
   }
 
+  /** Public video items per session id; sessions without a video are absent from the map. */
+  async listBySessionIds(sessionIds: number[]): Promise<Map<number, SessionVideoItemDto[]>> {
+    const bySession = new Map<number, SessionVideoItemDto[]>();
+    if (sessionIds.length === 0) return bySession;
+
+    const bucket = this.resolveBucket();
+    const videos = await this.videoRepository.find({
+      where: { sessionId: In(sessionIds) },
+      order: { createdAt: 'ASC' },
+    });
+    for (const video of videos) {
+      const items = bySession.get(video.sessionId) ?? [];
+      items.push({
+        url: this.photosService.getPublicUrl(bucket, video.storagePath),
+        posterUrl: this.photosService.getPublicUrl(bucket, video.posterStoragePath),
+        durationMs: video.durationMs,
+      });
+      bySession.set(video.sessionId, items);
+    }
+    return bySession;
+  }
+
   private async findSession(sessionToken: string): Promise<Session> {
-    const session = await this.sessionRepository.findOne({ where: { sessionToken } });
+    const session = await this.sessionRepository.findOne({ where: { sessionToken },
+      relations: ['event'],
+    });
     if (!session) throw new NotFoundException('Session not found');
     return session;
   }

@@ -5,6 +5,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
 
 import { AppDataSource as TestDataSource } from '../config/database/data-source';
+import { Event } from '../events/entities/event.entity';
 import { SessionFactory } from '../../test/factories/photos/session.factory';
 import { SessionVideoFactory } from '../../test/factories/photos/session-video.factory';
 import { SessionVideo } from './entities/session-video.entity';
@@ -195,6 +196,21 @@ describe('SessionVideosService', () => {
 
       // Assert
       expect(invalidate).toHaveBeenCalledWith(session.sessionToken);
+    });
+
+    it('should invalidate the cached gallery of the session event', async () => {
+      // Arrange
+      const session = await sessionFactory.create();
+      const event = await TestDataSource.getRepository(Event).findOneByOrFail({
+        id: session.eventId,
+      });
+      const invalidate = jest.spyOn(cache, 'invalidateGallery');
+
+      // Act
+      await service.confirm(session.sessionToken, { fileId: randomUUID() });
+
+      // Assert
+      expect(invalidate).toHaveBeenCalledWith(event.token);
     });
 
     it('should throw ConflictException when another video is already confirmed', async () => {

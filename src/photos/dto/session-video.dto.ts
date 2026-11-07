@@ -35,3 +35,14 @@ export class SessionVideoPresignedResponseDto {
   @ApiProperty({ type: SessionVideoUploadTargetDto, description: 'The .jpg poster' })
   poster!: SessionVideoUploadTargetDto;
 }
+
+export class SessionVideoItemDto {
+  @ApiProperty({ description: 'Public URL of the .mp4 clip' })
+  url!: string;
+
+  @ApiProperty({ description: 'Public URL of the .jpg poster' })
+  posterUrl!: string;
+
+  @ApiProperty({ type: Number, nullable: true, description: 'Clip duration in milliseconds' })
+  durationMs!: number | null;
+}
