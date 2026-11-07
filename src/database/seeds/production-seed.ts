@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 
+import { USER_ROLE } from '../../users/constants/user_role.enum';
+
 export const INCLUDED_TABLES = [
   'users',
   'brands',
@@ -40,6 +42,108 @@ export const EXCLUDED_TABLES = [
 
 export type IncludedTable = (typeof INCLUDED_TABLES)[number];
 export type SeedRow = Record<string, unknown>;
+
+/**
+ * `copy`: the source must already have the column. `fallback`: the seed fills
+ * the column with that value when the source is behind the local schema.
+ */
+export type ColumnPolicy = 'copy' | { fallback: unknown };
+
+/**
+ * Every NOT NULL column without a default of an included table. The spec
+ * compares it with the entities, so a migration that adds a required column
+ * cannot pass until it is classified here. Prefer a fallback for columns a
+ * migration adds: production receives them later than the local schema.
+ */
+export const REQUIRED_COLUMN_POLICY: Record<
+  IncludedTable,
+  Record<string, ColumnPolicy>
+> = {
+  users: {
+    role: 'copy',
+    first_name: 'copy',
+    last_name: 'copy',
+    password: 'copy',
+  },
+  brands: { name: 'copy' },
+  terms: { code: 'copy', title: 'copy', content: 'copy', scope: 'copy' },
+  products: { brand_id: 'copy', name: 'copy' },
+  packages: { brand_id: 'copy', name: 'copy' },
+  package_products: { package_id: 'copy', product_id: 'copy' },
+  package_terms: { package_id: 'copy', term_id: 'copy' },
+  brand_terms: { brand_id: 'copy', term_id: 'copy' },
+  extras: { brand_id: 'copy', name: 'copy' },
+  extra_products: { extra_id: 'copy', product_id: 'copy', action: 'copy' },
+  promotions: { brand_id: 'copy', name: 'copy', type: 'copy', value: 'copy' },
+  promotion_packages: {
+    promotion_id: 'copy',
+    package_id: 'copy',
+    tier_order: { fallback: 1 },
+    discount_percentage: { fallback: 0 },
+  },
+  event_types: { name: 'copy' },
+  event_service_types: { name: 'copy' },
+  event_phrases: { event_type_id: 'copy', content: 'copy' },
+  event_themes: { key: 'copy', name: 'copy' },
+  slots: { event_date: 'copy', period: 'copy' },
+  contracts: { user_id: 'copy', sku: 'copy', token: 'copy' },
+  contract_packages: {
+    contract_id: 'copy',
+    package_id: 'copy',
+    name_snapshot: 'copy',
+    base_price_snapshot: 'copy',
+  },
+  contract_extras: {
+    contract_id: 'copy',
+    extra_id: 'copy',
+    name_snapshot: 'copy',
+    base_price_snapshot: 'copy',
+  },
+  contract_promotions: {
+    contract_id: 'copy',
+    name_snapshot: 'copy',
+    type_snapshot: 'copy',
+    value_snapshot: 'copy',
+    applied_amount: 'copy',
+  },
+  contract_slots: { contract_id: 'copy', slot_id: 'copy' },
+  events: { key: 'copy', token: 'copy', contract_id: 'copy' },
+  bookings: {
+    event_date: 'copy',
+    service_starts_at: 'copy',
+    service_ends_at: 'copy',
+  },
+};
+
+export const DEV_USER_EMAIL = 'dev@brillipoint.test';
+
+/** Fixed admin so a seeded worktree can always be logged into. */
+export function buildDevUser(passwordHash: string): SeedRow {
+  return {
+    role: USER_ROLE.ADMIN,
+    first_name: 'Dev',
+    last_name: 'Admin',
+    email: DEV_USER_EMAIL,
+    password: passwordHash,
+  };
+}
+
+export interface SourceTableAccess {
+  name: string;
+  canSelect: boolean;
+}
+
+/** Tables that exist in the source but the seed role cannot read. */
+export function findUnreadableTables(
+  access: SourceTableAccess[],
+  tables: readonly string[],
+): string[] {
+  const included = new Set(tables);
+  return access
+    .filter((table) => included.has(table.name) && !table.canSelect)
+    .map((table) => table.name)
+    .sort();
+}
 
 export interface SanitizationContext {
   passwordHash: string;
@@ -285,16 +389,40 @@ export interface TargetColumn {
   name: string;
   nullable: boolean;
   hasDefault: boolean;
+  json?: boolean;
+}
+
+/**
+ * The driver hands json columns back already parsed, and would send a parsed
+ * array as a SQL array on insert. Serializing them keeps the value as json.
+ */
+export function serializeJsonColumns(
+  row: SeedRow,
+  jsonColumns: ReadonlySet<string>,
+): SeedRow {
+  return Object.fromEntries(
+    Object.entries(row).map(([column, value]) => [
+      column,
+      jsonColumns.has(column) && value !== null && value !== undefined
+        ? JSON.stringify(value)
+        : value,
+    ]),
+  );
 }
 
 export type TableReconciliation =
   | { status: 'skipped' }
-  | { status: 'copy'; defaultedColumns: string[] };
+  | {
+      status: 'copy';
+      defaultedColumns: string[];
+      fallbackColumns?: Record<string, unknown>;
+    };
 
 export function reconcileTableSchema(
   table: string,
   sourceColumns: string[] | undefined,
   targetColumns: TargetColumn[] | undefined,
+  policy: Record<string, Record<string, ColumnPolicy>> = REQUIRED_COLUMN_POLICY,
 ): TableReconciliation {
   if (!targetColumns) {
     throw new Error(
@@ -316,17 +444,30 @@ export function reconcileTableSchema(
   }
 
   const targetOnly = new Set(difference.targetOnly);
-  const missing = targetColumns.filter(
+  const required = targetColumns.filter(
     (column) =>
       targetOnly.has(column.name) && !column.nullable && !column.hasDefault,
   );
+  const fallbackColumns: Record<string, unknown> = {};
+  const missing = required.filter((column) => {
+    const columnPolicy = policy[table]?.[column.name];
+    if (typeof columnPolicy === 'object') {
+      fallbackColumns[column.name] = columnPolicy.fallback;
+      return false;
+    }
+    return true;
+  });
   if (missing.length > 0) {
     throw new Error(
-      `Target-only column ${missing.map((column) => `"${table}"."${column.name}"`).join(', ')} is NOT NULL without a default, so it cannot be left unset.`,
+      `Target-only column ${missing.map((column) => `"${table}"."${column.name}"`).join(', ')} is NOT NULL without a default, so it cannot be left unset. Declare a fallback for it in REQUIRED_COLUMN_POLICY (production-seed.ts).`,
     );
   }
 
-  return { status: 'copy', defaultedColumns: difference.targetOnly };
+  return {
+    status: 'copy',
+    defaultedColumns: difference.targetOnly,
+    ...(Object.keys(fallbackColumns).length > 0 && { fallbackColumns }),
+  };
 }
 
 export function assertLocalTarget(target: LocalTarget): void {

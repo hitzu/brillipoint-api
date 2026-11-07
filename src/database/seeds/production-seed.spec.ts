@@ -1,13 +1,20 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { DataSource } from 'typeorm';
 import {
+  DEV_USER_EMAIL,
   EXCLUDED_TABLES,
   INCLUDED_TABLES,
+  IncludedTable,
+  REQUIRED_COLUMN_POLICY,
   assertLocalTarget,
+  buildDevUser,
   buildRowFilter,
   compareSchemaColumns,
+  findUnreadableTables,
   reconcileTableSchema,
   sanitizeRow,
+  serializeJsonColumns,
 } from './production-seed';
 
 const SRC_DIR = path.resolve(__dirname, '../..');
@@ -434,6 +441,162 @@ describe('production seed policy', () => {
       expect(reconcileTableSchema('brands', ['id'], [target('id')])).toEqual({
         status: 'copy',
         defaultedColumns: [],
+      });
+    });
+
+    it('fills a required target-only column that declares a fallback', () => {
+      expect(
+        reconcileTableSchema(
+          'promotion_packages',
+          ['id', 'promotion_id', 'package_id'],
+          [
+            target('id'),
+            target('promotion_id'),
+            target('package_id'),
+            target('tier_order'),
+            target('discount_percentage'),
+          ],
+        ),
+      ).toEqual({
+        status: 'copy',
+        defaultedColumns: ['discount_percentage', 'tier_order'],
+        fallbackColumns: { tier_order: 1, discount_percentage: 0 },
+      });
+    });
+
+    it('names the policy file when a required target-only column has no fallback', () => {
+      expect(() =>
+        reconcileTableSchema(
+          'brands',
+          ['id'],
+          [target('id'), target('required_flag')],
+        ),
+      ).toThrow(/REQUIRED_COLUMN_POLICY/);
+    });
+  });
+
+  describe('serializeJsonColumns', () => {
+    const json = new Set(['items_snapshot']);
+
+    it('stringifies arrays and objects of json columns so they are not sent as SQL arrays', () => {
+      expect(
+        serializeJsonColumns(
+          { id: 1, items_snapshot: [{ name: 'Frame' }] },
+          json,
+        ),
+      ).toEqual({ id: 1, items_snapshot: '[{"name":"Frame"}]' });
+      expect(serializeJsonColumns({ items_snapshot: { a: 1 } }, json)).toEqual({
+        items_snapshot: '{"a":1}',
+      });
+    });
+
+    it('quotes a json scalar, which the driver returns already parsed', () => {
+      expect(serializeJsonColumns({ items_snapshot: 'text' }, json)).toEqual({
+        items_snapshot: '"text"',
+      });
+    });
+
+    it('keeps null and leaves columns that are not json untouched', () => {
+      expect(
+        serializeJsonColumns({ items_snapshot: null, tags: ['a', 'b'] }, json),
+      ).toEqual({ items_snapshot: null, tags: ['a', 'b'] });
+    });
+  });
+
+  describe('findUnreadableTables', () => {
+    it('reports existing included tables the role cannot select, sorted', () => {
+      expect(
+        findUnreadableTables(
+          [
+            { name: 'extras', canSelect: false },
+            { name: 'brands', canSelect: true },
+            { name: 'brand_terms', canSelect: false },
+            { name: 'tokens', canSelect: false },
+          ],
+          INCLUDED_TABLES,
+        ),
+      ).toEqual(['brand_terms', 'extras']);
+    });
+
+    it('reports nothing when every included table is readable or absent', () => {
+      expect(
+        findUnreadableTables(
+          [{ name: 'brands', canSelect: true }],
+          INCLUDED_TABLES,
+        ),
+      ).toEqual([]);
+    });
+  });
+
+  describe('required column policy', () => {
+    let required: Record<string, string[]>;
+
+    beforeAll(async () => {
+      const dataSource = new DataSource({
+        type: 'postgres',
+        entities: [path.join(SRC_DIR, '**/entities/*.entity.ts')],
+      });
+      // Builds the entity metadata without opening a connection.
+      await (
+        dataSource as unknown as { buildMetadatas(): Promise<void> }
+      ).buildMetadatas();
+      required = Object.fromEntries(
+        dataSource.entityMetadatas
+          .filter((metadata) =>
+            (INCLUDED_TABLES as readonly string[]).includes(metadata.tableName),
+          )
+          .map((metadata) => [
+            metadata.tableName,
+            metadata.columns
+              .filter(
+                (column) =>
+                  !column.isNullable &&
+                  column.default === undefined &&
+                  !column.isGenerated &&
+                  !column.isCreateDate &&
+                  !column.isUpdateDate &&
+                  !column.isVersion,
+              )
+              .map((column) => column.databaseName)
+              .sort(),
+          ]),
+      );
+    });
+
+    it('classifies every required column of every included table', () => {
+      const unclassified = Object.entries(required).flatMap(
+        ([table, columns]) =>
+          columns
+            .filter(
+              (column) =>
+                !(column in REQUIRED_COLUMN_POLICY[table as IncludedTable]),
+            )
+            .map((column) => `${table}.${column}`),
+      );
+
+      expect(unclassified).toEqual([]);
+    });
+
+    it('does not classify a column that is not required anymore', () => {
+      const stale = INCLUDED_TABLES.flatMap((table) =>
+        Object.keys(REQUIRED_COLUMN_POLICY[table])
+          .filter((column) => !(required[table] ?? []).includes(column))
+          .map((column) => `${table}.${column}`),
+      );
+
+      expect(stale).toEqual([]);
+    });
+
+    it('lets the dev user satisfy every required users column', () => {
+      const devUser = buildDevUser('hash');
+
+      expect(required.users.filter((column) => !(column in devUser))).toEqual(
+        [],
+      );
+      expect(devUser).toMatchObject({
+        role: 'admin',
+        email: DEV_USER_EMAIL,
+        password: 'hash',
       });
     });
   });
