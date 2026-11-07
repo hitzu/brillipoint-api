@@ -389,6 +389,25 @@ export interface TargetColumn {
   name: string;
   nullable: boolean;
   hasDefault: boolean;
+  json?: boolean;
+}
+
+/**
+ * The driver hands json columns back already parsed, and would send a parsed
+ * array as a SQL array on insert. Serializing them keeps the value as json.
+ */
+export function serializeJsonColumns(
+  row: SeedRow,
+  jsonColumns: ReadonlySet<string>,
+): SeedRow {
+  return Object.fromEntries(
+    Object.entries(row).map(([column, value]) => [
+      column,
+      jsonColumns.has(column) && value !== null && value !== undefined
+        ? JSON.stringify(value)
+        : value,
+    ]),
+  );
 }
 
 export type TableReconciliation =

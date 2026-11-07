@@ -19,6 +19,7 @@ import {
   TargetColumn,
   reconcileTableSchema,
   sanitizeRow,
+  serializeJsonColumns,
 } from './production-seed';
 
 const DEFAULT_CONTRACT_LIMIT = 50;
@@ -194,7 +195,8 @@ async function readSchema(
         is_nullable = 'YES' AS nullable,
         (column_default IS NOT NULL
           OR is_identity = 'YES'
-          OR is_generated = 'ALWAYS') AS has_default
+          OR is_generated = 'ALWAYS') AS has_default,
+        data_type IN ('json', 'jsonb') AS json
       FROM information_schema.columns
       WHERE table_schema = 'public'
         AND table_name = ANY($1::text[])
@@ -206,6 +208,7 @@ async function readSchema(
     column_name: string;
     nullable: boolean;
     has_default: boolean;
+    json: boolean;
   }>;
 
   const schema = new Map<string, TargetColumn[]>();
@@ -215,6 +218,7 @@ async function readSchema(
       name: row.column_name,
       nullable: row.nullable,
       hasDefault: row.has_default,
+      json: row.json,
     });
     schema.set(row.table_name, columns);
   }
@@ -225,6 +229,7 @@ interface SchemaReport {
   skippedTables: Set<string>;
   defaultedColumns: Map<string, string[]>;
   fallbackColumns: Map<string, Record<string, unknown>>;
+  jsonColumns: Map<string, Set<string>>;
 }
 
 // information_schema hides tables the role cannot read, which makes them look
@@ -263,8 +268,17 @@ async function reconcileSchemas(
     skippedTables: new Set(),
     defaultedColumns: new Map(),
     fallbackColumns: new Map(),
+    jsonColumns: new Map(),
   };
   for (const table of ALL_TABLES) {
+    report.jsonColumns.set(
+      table,
+      new Set(
+        (targetSchema.get(table) ?? [])
+          .filter((column) => column.json)
+          .map((column) => column.name),
+      ),
+    );
     const result = reconcileTableSchema(
       table,
       sourceSchema.get(table)?.map((column) => column.name),
@@ -392,6 +406,7 @@ async function copyTable(
   context: SanitizationContext,
   batchSize: number,
   fallbackColumns: Record<string, unknown> = {},
+  jsonColumns: ReadonlySet<string> = new Set(),
 ): Promise<number> {
   const filter = buildRowFilter(table, contractIds, slotIds);
   let lastId = 0;
@@ -418,10 +433,12 @@ async function copyTable(
     await insertRows(
       target,
       table,
-      rows.map((row) => ({
-        ...sanitizeRow(table, row, context),
-        ...fallbackColumns,
-      })),
+      rows.map((row) =>
+        serializeJsonColumns(
+          { ...sanitizeRow(table, row, context), ...fallbackColumns },
+          jsonColumns,
+        ),
+      ),
     );
     lastId = Number(rows[rows.length - 1].id);
     copied += rows.length;
@@ -625,6 +642,7 @@ export async function run(): Promise<void> {
         context,
         batchSize,
         schemaReport.fallbackColumns.get(table),
+        schemaReport.jsonColumns.get(table),
       );
       await resetSequence(targetRunner, table);
       counts.set(table, count);

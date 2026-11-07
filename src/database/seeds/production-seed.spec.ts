@@ -14,6 +14,7 @@ import {
   findUnreadableTables,
   reconcileTableSchema,
   sanitizeRow,
+  serializeJsonColumns,
 } from './production-seed';
 
 const SRC_DIR = path.resolve(__dirname, '../..');
@@ -471,6 +472,34 @@ describe('production seed policy', () => {
           [target('id'), target('required_flag')],
         ),
       ).toThrow(/REQUIRED_COLUMN_POLICY/);
+    });
+  });
+
+  describe('serializeJsonColumns', () => {
+    const json = new Set(['items_snapshot']);
+
+    it('stringifies arrays and objects of json columns so they are not sent as SQL arrays', () => {
+      expect(
+        serializeJsonColumns(
+          { id: 1, items_snapshot: [{ name: 'Frame' }] },
+          json,
+        ),
+      ).toEqual({ id: 1, items_snapshot: '[{"name":"Frame"}]' });
+      expect(serializeJsonColumns({ items_snapshot: { a: 1 } }, json)).toEqual({
+        items_snapshot: '{"a":1}',
+      });
+    });
+
+    it('quotes a json scalar, which the driver returns already parsed', () => {
+      expect(serializeJsonColumns({ items_snapshot: 'text' }, json)).toEqual({
+        items_snapshot: '"text"',
+      });
+    });
+
+    it('keeps null and leaves columns that are not json untouched', () => {
+      expect(
+        serializeJsonColumns({ items_snapshot: null, tags: ['a', 'b'] }, json),
+      ).toEqual({ items_snapshot: null, tags: ['a', 'b'] });
     });
   });
 
