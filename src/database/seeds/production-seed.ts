@@ -34,6 +34,7 @@ export const EXCLUDED_TABLES = [
   'payments',
   'sessions',
   'photos',
+  'session_videos',
   'notes',
   'event_analytics',
   'contract_preparation_profiles',
