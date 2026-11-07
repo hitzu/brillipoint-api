@@ -6,6 +6,7 @@ import {
   assertLocalTarget,
   buildRowFilter,
   compareSchemaColumns,
+  reconcileTableSchema,
   sanitizeRow,
 } from './production-seed';
 
@@ -371,6 +372,69 @@ describe('production seed policy', () => {
     ).toEqual({
       sourceOnly: ['legacy_reference'],
       targetOnly: ['booking_id'],
+    });
+  });
+  describe('reconcileTableSchema', () => {
+    const target = (
+      name: string,
+      overrides: { nullable?: boolean; hasDefault?: boolean } = {},
+    ) => ({ name, nullable: false, hasDefault: false, ...overrides });
+
+    it('fills target-only columns that are nullable or have a default', () => {
+      expect(
+        reconcileTableSchema(
+          'brands',
+          ['id', 'name'],
+          [
+            target('id'),
+            target('name'),
+            target('min_amount_hold_slot', { nullable: true }),
+            target('expo_monthly_risk_enabled', { hasDefault: true }),
+          ],
+        ),
+      ).toEqual({
+        status: 'copy',
+        defaultedColumns: ['expo_monthly_risk_enabled', 'min_amount_hold_slot'],
+      });
+    });
+
+    it('rejects a NOT NULL target-only column without default, naming table and column', () => {
+      expect(() =>
+        reconcileTableSchema(
+          'brands',
+          ['id'],
+          [target('id'), target('required_flag')],
+        ),
+      ).toThrow(/"brands".*"required_flag"/);
+    });
+
+    it('skips a table that is absent from the source', () => {
+      expect(
+        reconcileTableSchema('bookings', undefined, [target('id')]),
+      ).toEqual({ status: 'skipped' });
+    });
+
+    it('still aborts when the source has columns the target lacks', () => {
+      expect(() =>
+        reconcileTableSchema(
+          'brands',
+          ['id', 'newer_in_source'],
+          [target('id')],
+        ),
+      ).toThrow(/Source-only: \[newer_in_source\]/);
+    });
+
+    it('still aborts when the table is missing from the target', () => {
+      expect(() => reconcileTableSchema('brands', ['id'], undefined)).toThrow(
+        /missing from target/,
+      );
+    });
+
+    it('copies identical schemas without defaulting anything', () => {
+      expect(reconcileTableSchema('brands', ['id'], [target('id')])).toEqual({
+        status: 'copy',
+        defaultedColumns: [],
+      });
     });
   });
 });
