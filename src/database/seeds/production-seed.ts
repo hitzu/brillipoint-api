@@ -10,6 +10,7 @@ export const INCLUDED_TABLES = [
   'package_terms',
   'brand_terms',
   'extras',
+  'extra_products',
   'promotions',
   'promotion_packages',
   'event_types',
@@ -23,6 +24,7 @@ export const INCLUDED_TABLES = [
   'contract_promotions',
   'contract_slots',
   'events',
+  'bookings',
 ] as const;
 
 export const EXCLUDED_TABLES = [
@@ -207,6 +209,22 @@ export function sanitizeRow(
         ),
         print_templates: null,
       };
+    case 'bookings':
+      return {
+        ...row,
+        title: `Local Booking ${String(id)}`,
+        venue_name: null,
+        maps_url: null,
+        event_date: shiftDate(row.event_date, context.dateShiftDays),
+        service_starts_at: shiftTimestamp(
+          row.service_starts_at,
+          context.dateShiftDays,
+        ),
+        service_ends_at: shiftTimestamp(
+          row.service_ends_at,
+          context.dateShiftDays,
+        ),
+      };
     default:
       return { ...row };
   }
@@ -227,6 +245,15 @@ export function buildRowFilter(
   if (CONTRACT_CHILD_TABLES.has(table)) {
     return {
       sql: '"contract_id" = ANY($1::int[])',
+      parameters: [contractIds],
+    };
+  }
+
+  // Private events have no contract, so they are copied whole; bookings of
+  // contracts outside the sample are skipped to keep the contract FK valid.
+  if (table === 'bookings') {
+    return {
+      sql: '("contract_id" = ANY($1::int[]) OR "contract_id" IS NULL)',
       parameters: [contractIds],
     };
   }

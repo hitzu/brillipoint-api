@@ -410,7 +410,8 @@ async function auditTarget(target: QueryRunner): Promise<void> {
       (SELECT COUNT(*) FROM brands WHERE email IS NOT NULL AND email NOT LIKE '%@example.test') AS brand_emails,
       (SELECT COUNT(*) FROM brands WHERE logo_url IS NOT NULL) AS brand_logos,
       ${themeImagesAudit} AS theme_images,
-      (SELECT COUNT(*) FROM events WHERE service_location_url IS NOT NULL OR print_templates IS NOT NULL) AS event_external_data
+      (SELECT COUNT(*) FROM events WHERE service_location_url IS NOT NULL OR print_templates IS NOT NULL) AS event_external_data,
+      (SELECT COUNT(*) FROM bookings WHERE venue_name IS NOT NULL OR maps_url IS NOT NULL OR title IS DISTINCT FROM 'Local Booking ' || id) AS booking_free_text
   `)) as Array<Record<string, string>>;
 
   const failures = Object.entries(audit)

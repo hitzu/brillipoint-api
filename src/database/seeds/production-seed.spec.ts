@@ -1,3 +1,5 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import {
   EXCLUDED_TABLES,
   INCLUDED_TABLES,
@@ -7,11 +9,130 @@ import {
   sanitizeRow,
 } from './production-seed';
 
+const SRC_DIR = path.resolve(__dirname, '../..');
+const ENTITY_TABLE_PATTERN = /@Entity\(\s*(?:'([^']+)'|\{\s*name:\s*'([^']+)')/;
+
+function listEntityFiles(directory: string): string[] {
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const fullPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      return listEntityFiles(fullPath);
+    }
+    return entry.name.endsWith('.entity.ts') ? [fullPath] : [];
+  });
+}
+
+function readEntityTables(): string[] {
+  return listEntityFiles(SRC_DIR).flatMap((file) => {
+    const match = ENTITY_TABLE_PATTERN.exec(fs.readFileSync(file, 'utf8'));
+    return match ? [match[1] ?? match[2]] : [];
+  });
+}
+
 describe('production seed policy', () => {
   const context = {
     passwordHash: 'local-password-hash',
     dateShiftDays: 10,
   };
+
+  it('classifies every entity table as either included or excluded', () => {
+    const classified = new Set<string>([
+      ...INCLUDED_TABLES,
+      ...EXCLUDED_TABLES,
+    ]);
+    const entityTables = readEntityTables();
+
+    expect(entityTables.length).toBeGreaterThan(0);
+    expect(entityTables.filter((table) => !classified.has(table))).toEqual([]);
+  });
+
+  it('does not list a table that has no entity', () => {
+    const entityTables = new Set(readEntityTables());
+
+    expect(
+      [...INCLUDED_TABLES, ...EXCLUDED_TABLES].filter(
+        (table) => !entityTables.has(table),
+      ),
+    ).toEqual([]);
+  });
+
+  it('includes bookings after contracts and extra_products after its parents', () => {
+    const order = (table: string) =>
+      (INCLUDED_TABLES as readonly string[]).indexOf(table);
+
+    expect(order('bookings')).toBeGreaterThan(order('contracts'));
+    expect(order('extra_products')).toBeGreaterThan(order('extras'));
+    expect(order('extra_products')).toBeGreaterThan(order('products'));
+  });
+
+  it('replaces free-text booking fields and shifts booking dates', () => {
+    const sanitized = sanitizeRow(
+      'bookings',
+      {
+        id: 5,
+        status: 'confirmed',
+        purpose: 'event',
+        contract_id: 3,
+        title: 'Cumpleaños de María Pérez',
+        venue_name: 'Casa de María',
+        maps_url: 'https://maps.example/casa-de-maria',
+        event_date: '2026-02-01',
+        service_starts_at: '2026-02-01T18:00:00.000Z',
+        service_ends_at: '2026-02-01T22:00:00.000Z',
+      },
+      context,
+    );
+
+    expect(sanitized).toMatchObject({
+      id: 5,
+      status: 'confirmed',
+      purpose: 'event',
+      contract_id: 3,
+      title: 'Local Booking 5',
+      venue_name: null,
+      maps_url: null,
+      event_date: '2026-02-11',
+      service_starts_at: new Date('2026-02-11T18:00:00.000Z'),
+      service_ends_at: new Date('2026-02-11T22:00:00.000Z'),
+    });
+  });
+
+  it('keeps a private booking without a contract and without a title', () => {
+    expect(
+      sanitizeRow(
+        'bookings',
+        {
+          id: 6,
+          contract_id: null,
+          title: null,
+          venue_name: 'Domicilio',
+          maps_url: null,
+          event_date: '2026-02-01',
+          service_starts_at: '2026-02-01T18:00:00.000Z',
+          service_ends_at: '2026-02-01T22:00:00.000Z',
+        },
+        context,
+      ),
+    ).toMatchObject({
+      contract_id: null,
+      title: 'Local Booking 6',
+      venue_name: null,
+      maps_url: null,
+    });
+  });
+
+  it('copies extra_products untouched', () => {
+    const row = { id: 1, extra_id: 2, product_id: 3, quantity: 1, action: 'x' };
+
+    expect(sanitizeRow('extra_products', row, context)).toEqual(row);
+  });
+
+  it('copies bookings of the selected contracts and every private booking', () => {
+    expect(buildRowFilter('bookings', [10, 11], [20])).toEqual({
+      sql: '("contract_id" = ANY($1::int[]) OR "contract_id" IS NULL)',
+      parameters: [[10, 11]],
+    });
+  });
 
   it('includes the complete catalog, contract, and event relationship graph', () => {
     expect(INCLUDED_TABLES).toEqual(
