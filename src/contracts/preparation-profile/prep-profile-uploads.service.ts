@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
@@ -12,6 +13,12 @@ import { Contract } from '../entities/contract.entity';
 import { PrepProfileUploadUrlDto } from './dto/prep-profile-upload-url.dto';
 import { assertPrepProfileQuestionId } from './prep-profile.validation';
 import { StorageService } from '../../common/storage/storage.service';
+import {
+  TATTOO_DESIGNS_QUESTION_ID,
+  hasGlitterBarPackage,
+  isTattooDesignsClosed,
+  resolveEventDate,
+} from './tattoo-designs.policy';
 
 function normalizePhone(value: string): string {
   const digits = value.replace(/\D/g, '');
@@ -73,12 +80,35 @@ export class PrepProfileUploadsService {
       );
     }
 
+    const isTattooDesigns = question.id === TATTOO_DESIGNS_QUESTION_ID;
     const contract = await this.contractsRepository.findOne({
       where: { token: input.token },
       select: { id: true, clientPhone: true },
+      ...(isTattooDesigns
+        ? { relations: { bookings: true, items: { package: true } } }
+        : {}),
     });
     if (!contract || !phonesMatch(contract.clientPhone ?? null, input.phone)) {
       throw new NotFoundException('Contract not found');
+    }
+
+    if (isTattooDesigns) {
+      if (!hasGlitterBarPackage(contract.items)) {
+        throw new UnprocessableEntityException(
+          'Contract has no Glitter bar package',
+        );
+      }
+      const eventDate = resolveEventDate(contract.bookings);
+      if (eventDate != null && isTattooDesignsClosed(eventDate, new Date())) {
+        throw new ConflictException(
+          `Question is locked: ${TATTOO_DESIGNS_QUESTION_ID}`,
+        );
+      }
+      if (!input.mime.startsWith('image/')) {
+        throw new UnprocessableEntityException(
+          'Tattoo designs must be images',
+        );
+      }
     }
 
     const name = this.storageService.sanitizeFileName(input.fileName);

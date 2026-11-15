@@ -2,6 +2,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { plainToInstance } from 'class-transformer';
@@ -19,6 +20,13 @@ import {
 } from './prep-profile.questions';
 import { assertPrepProfileQuestionId, validatePrepProfileAnswer } from './prep-profile.validation';
 import { PrepProfileUploadsService } from './prep-profile-uploads.service';
+import {
+  TATTOO_DESIGNS_MAX,
+  TATTOO_DESIGNS_QUESTION_ID,
+  hasGlitterBarPackage,
+  isTattooDesignsClosed,
+  resolveEventDate,
+} from './tattoo-designs.policy';
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value != null && !Array.isArray(value);
@@ -262,12 +270,18 @@ export class ContractsPreparationProfileService {
             }),
         });
 
+    const locked: Record<string, boolean> = { ...(profile?.locked ?? {}) };
+    const tattoo = await this.getTattooContext(contractId);
+    if (tattoo.isGlitterBar && tattoo.closed) {
+      locked[TATTOO_DESIGNS_QUESTION_ID] = true;
+    }
+
     return plainToInstance(
       PrepProfileDto,
       {
         contractId,
         answers: mappedAnswers,
-        locked: profile?.locked ?? {},
+        locked,
       },
       { excludeExtraneousValues: true },
     );
@@ -342,6 +356,11 @@ export class ContractsPreparationProfileService {
     // Validate and de-dup by questionId (last value wins).
     const valueByQuestionId = new Map<string, unknown>();
     for (const item of answers) {
+      if (item.questionId === TATTOO_DESIGNS_QUESTION_ID) {
+        throw new UnprocessableEntityException(
+          `Question ${TATTOO_DESIGNS_QUESTION_ID} is managed by the tattoo designs endpoint`,
+        );
+      }
       validatePrepProfileAnswer({
         questionId: item.questionId,
         value: item.value,
@@ -451,6 +470,9 @@ export class ContractsPreparationProfileService {
     if (this.isComplete(profile.answers)) {
       const lockedAll: Record<string, boolean> = { ...(profile.locked ?? {}) };
       for (const q of PREP_PROFILE_QUESTIONS) {
+        if (q.id === TATTOO_DESIGNS_QUESTION_ID) {
+          continue;
+        }
         lockedAll[q.id] = true;
       }
       profile.locked = lockedAll;
@@ -458,6 +480,92 @@ export class ContractsPreparationProfileService {
 
     const saved = await this.profilesRepository.save(profile);
     return await this.toDto(contractId, saved, options);
+  }
+
+  private async getTattooContext(
+    contractId: number,
+  ): Promise<{ isGlitterBar: boolean; closed: boolean }> {
+    const contract = await this.contractsRepository.findOne({
+      where: { id: contractId },
+      relations: { bookings: true, items: { package: true } },
+    });
+    const eventDate = resolveEventDate(contract?.bookings);
+    return {
+      isGlitterBar: hasGlitterBarPackage(contract?.items),
+      closed:
+        eventDate != null && isTattooDesignsClosed(eventDate, new Date()),
+    };
+  }
+
+  /**
+   * Replaces the whole list of tattoo designs (add, replace and delete are all
+   * "set the new list"). Open only for Glitter bar contracts, until 7 days
+   * before the event.
+   */
+  async setTattooDesigns(input: {
+    token: string;
+    phone: string;
+    assets: Array<{ path: string; mime: string }>;
+    assetsMode?: PrepProfileAssetsMode;
+    expiresIn?: number;
+  }): Promise<PrepProfileDto> {
+    const contractId = await this.getContractIdByTokenAndPhone(
+      input.token,
+      input.phone,
+    );
+
+    const tattoo = await this.getTattooContext(contractId);
+    if (!tattoo.isGlitterBar) {
+      throw new UnprocessableEntityException(
+        'Contract has no Glitter bar package',
+      );
+    }
+    if (tattoo.closed) {
+      throw new ConflictException(
+        `Question is locked: ${TATTOO_DESIGNS_QUESTION_ID}`,
+      );
+    }
+    if (input.assets.length > TATTOO_DESIGNS_MAX) {
+      throw new UnprocessableEntityException(
+        `At most ${TATTOO_DESIGNS_MAX} tattoo designs are allowed`,
+      );
+    }
+    const folder = `${contractId}/${TATTOO_DESIGNS_QUESTION_ID}/`;
+    for (const asset of input.assets) {
+      if (!isAssetLike(asset) || !asset.path.startsWith(folder)) {
+        throw new UnprocessableEntityException(
+          'Invalid tattoo design asset path',
+        );
+      }
+      if (!asset.mime.startsWith('image/')) {
+        throw new UnprocessableEntityException(
+          'Tattoo designs must be images',
+        );
+      }
+    }
+
+    let profile = await this.profilesRepository.findOne({
+      where: { contractId },
+    });
+    if (!profile) {
+      profile = this.profilesRepository.create({
+        contractId,
+        answers: {},
+        locked: {},
+      });
+    }
+    profile.answers = {
+      ...(profile.answers ?? {}),
+      [TATTOO_DESIGNS_QUESTION_ID]: input.assets.map((a) => ({
+        path: a.path,
+        mime: a.mime,
+      })),
+    };
+    const saved = await this.profilesRepository.save(profile);
+    return await this.toDto(contractId, saved, {
+      assets: input.assetsMode,
+      expiresIn: input.expiresIn,
+    });
   }
 
   async unlockQuestion(input: {

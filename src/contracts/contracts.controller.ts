@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   ParseIntPipe,
   Query,
   ValidationPipe,
@@ -43,6 +44,7 @@ import { PatchPrepProfileAnswerDto } from './preparation-profile/dto/patch-prep-
 import { PatchPrepProfileAnswersBulkDto } from './preparation-profile/dto/patch-prep-profile-answers-bulk.dto';
 import { PrepProfileDto } from './preparation-profile/dto/prep-profile.dto';
 import { PrepProfilePublicQueryDto } from './preparation-profile/dto/prep-profile-public.query.dto';
+import { SetPrepProfileTattooDesignsDto } from './preparation-profile/dto/set-prep-profile-tattoo-designs.dto';
 import { UnlockPrepProfileQuestionDto } from './preparation-profile/dto/unlock-prep-profile-question.dto';
 import { ContractsPreparationProfileService } from './preparation-profile/contracts-preparation-profile.service';
 import { CreatePrepProfileUploadUrlDto } from './preparation-profile/dto/create-prep-profile-upload-url.dto';
@@ -155,6 +157,28 @@ export class ContractsController {
       phone: query.phone,
       answers: dto.answers,
       assets: query.assets,
+      expiresIn: query.expiresIn,
+    });
+  }
+
+  @Put('/public/:token/prep-profile/tattoo-designs')
+  @ApiParam({ name: 'token', type: String })
+  @ApiQuery({ name: 'phone', type: String, required: true })
+  @ApiBody({ type: SetPrepProfileTattooDesignsDto })
+  @ApiOkResponse({ type: PrepProfileDto })
+  @Public()
+  async setPrepProfileTattooDesigns(
+    @Param('token') token: string,
+    @Query(new ValidationPipe({ transform: true, whitelist: true }))
+    query: PrepProfilePublicQueryDto,
+    @Body(new ValidationPipe({ transform: true, whitelist: true }))
+    dto: SetPrepProfileTattooDesignsDto,
+  ): Promise<PrepProfileDto> {
+    return await this.contractsPreparationProfileService.setTattooDesigns({
+      token,
+      phone: query.phone,
+      assets: dto.assets,
+      assetsMode: query.assets,
       expiresIn: query.expiresIn,
     });
   }

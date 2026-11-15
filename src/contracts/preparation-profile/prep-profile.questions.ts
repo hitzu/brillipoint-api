@@ -4,7 +4,8 @@ export type PrepProfileQuestionGroup =
   | 'vestido'
   | 'accesorios'
   | 'maquillaje'
-  | 'peinado';
+  | 'peinado'
+  | 'tatuajes';
 
 export type PrepProfileQuestionType =
   | 'string'
@@ -291,6 +292,19 @@ const BRIDE_QUESTIONS: PrepProfileQuestionDefinition[] = [
   },
 ];
 
+// Glitter bar: the client uploads up to 5 tattoo designs. Managed by the
+// dedicated tattoo-designs flow (see tattoo-designs.policy.ts), never by the
+// generic answer endpoints, and never part of the Make up completion check.
+const TATTOO_QUESTIONS: PrepProfileQuestionDefinition[] = [
+  {
+    id: 'tattoo_designs',
+    type: 'asset_array',
+    group: 'tatuajes',
+    label: 'Diseños de tatuajes (hasta 5)',
+    placeholder: 'Sube hasta 5 imágenes con los diseños que quieres.',
+  },
+];
+
 const buildSocialQuestions = (n: number): PrepProfileQuestionDefinition[] => {
   const p = SOCIAL_PREFIX(n);
   return [
@@ -351,6 +365,7 @@ const buildSocialQuestions = (n: number): PrepProfileQuestionDefinition[] => {
 export const PREP_PROFILE_QUESTIONS: ReadonlyArray<PrepProfileQuestionDefinition> =
   [
     ...BRIDE_QUESTIONS,
+    ...TATTOO_QUESTIONS,
     // Workaround: hoy solo existe social #1 (futuro: agregar buildSocialQuestions(2), etc.)
     ...buildSocialQuestions(1),
   ] as const satisfies ReadonlyArray<PrepProfileQuestionDefinition>;
@@ -376,6 +391,7 @@ export const PREP_PROFILE_QUESTION_IDS = new Set<string>(
 export const PREP_PROFILE_QUESTION_IDS_OPTIONAL_FOR_COMPLETION = new Set<string>([
   'event_setting',
   'desired_feeling',
+  'tattoo_designs',
 ]);
 
 export function isPrepAssetMetadata(value: unknown): value is PrepAssetMetadata {
