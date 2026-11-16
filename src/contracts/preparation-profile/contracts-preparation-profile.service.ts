@@ -6,8 +6,9 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { plainToInstance } from 'class-transformer';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
+import { Carousel } from '../../carousels/entities/carousel.entity';
 import { Contract } from '../entities/contract.entity';
 import { ContractPreparationProfile } from '../entities/contract-preparation-profile.entity';
 import type { PrepProfileAssetsMode } from './dto/prep-profile-public.query.dto';
@@ -21,11 +22,15 @@ import {
 import { assertPrepProfileQuestionId, validatePrepProfileAnswer } from './prep-profile.validation';
 import { PrepProfileUploadsService } from './prep-profile-uploads.service';
 import {
+  TATTOO_CATALOG_PAGE,
+  TATTOO_CATALOG_QUESTION_ID,
+  TATTOO_CATALOG_SECTION,
   TATTOO_DESIGNS_MAX,
   TATTOO_DESIGNS_QUESTION_ID,
   hasTattooDesignsProduct,
   isTattooDesignsClosed,
   resolveEventDate,
+  type TattooCatalogDesign,
 } from './tattoo-designs.policy';
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -193,6 +198,19 @@ function phonesMatch(a: string | null, b: string): boolean {
   const left = normalizePhone(a);
   const right = normalizePhone(b);
   return left.length > 0 && left === right;
+}
+
+function readCatalogDesigns(value: unknown): TattooCatalogDesign[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter(
+    (v): v is TattooCatalogDesign =>
+      isPlainObject(v) &&
+      typeof v.carouselId === 'number' &&
+      typeof v.title === 'string' &&
+      typeof v.imageUrl === 'string',
+  );
 }
 
 @Injectable()
@@ -527,10 +545,55 @@ export class ContractsPreparationProfileService {
    * "set the new list"). Open only for contracts that include a trigger product, until 7 days
    * before the event.
    */
+  /**
+   * Resolves chosen ids against active catalog rows. A design that was already
+   * chosen keeps its frozen copy even if its row changed or was deactivated.
+   */
+  private async resolveCatalogDesigns(
+    ids: number[],
+    current: TattooCatalogDesign[],
+  ): Promise<TattooCatalogDesign[]> {
+    if (new Set(ids).size !== ids.length) {
+      throw new UnprocessableEntityException(
+        'A catalog design can only be chosen once',
+      );
+    }
+    const kept = new Map(current.map((d) => [d.carouselId, d]));
+    const newIds = ids.filter((id) => !kept.has(id));
+    const rows = newIds.length
+      ? await this.contractsRepository.manager.getRepository(Carousel).find({
+          where: {
+            id: In(newIds),
+            page: TATTOO_CATALOG_PAGE,
+            section: TATTOO_CATALOG_SECTION,
+            status: 'active',
+          },
+        })
+      : [];
+    if (rows.length !== newIds.length) {
+      throw new UnprocessableEntityException('Invalid catalog design');
+    }
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    return ids.map((id) => {
+      const existing = kept.get(id);
+      if (existing) {
+        return existing;
+      }
+      const row = byId.get(id) as Carousel;
+      return {
+        carouselId: row.id,
+        title: row.title ?? '',
+        imageUrl: row.imageUrl,
+      };
+    });
+  }
+
   async setTattooDesigns(input: {
     token: string;
     phone: string;
     assets: Array<{ path: string; mime: string }>;
+    /** Catalog designs to choose; omitted keeps the current choice. */
+    catalogDesignIds?: number[];
     assetsMode?: PrepProfileAssetsMode;
     expiresIn?: number;
   }): Promise<PrepProfileDto> {
@@ -548,11 +611,6 @@ export class ContractsPreparationProfileService {
     if (tattoo.closed) {
       throw new ConflictException(
         `Question is locked: ${TATTOO_DESIGNS_QUESTION_ID}`,
-      );
-    }
-    if (input.assets.length > TATTOO_DESIGNS_MAX) {
-      throw new UnprocessableEntityException(
-        `At most ${TATTOO_DESIGNS_MAX} tattoo designs are allowed`,
       );
     }
     const folder = `${contractId}/${TATTOO_DESIGNS_QUESTION_ID}/`;
@@ -579,12 +637,28 @@ export class ContractsPreparationProfileService {
         locked: {},
       });
     }
+    const currentCatalog = readCatalogDesigns(
+      profile.answers?.[TATTOO_CATALOG_QUESTION_ID],
+    );
+    const catalogDesigns =
+      input.catalogDesignIds === undefined
+        ? currentCatalog
+        : await this.resolveCatalogDesigns(input.catalogDesignIds, currentCatalog);
+    if (input.assets.length + catalogDesigns.length > TATTOO_DESIGNS_MAX) {
+      throw new UnprocessableEntityException(
+        `At most ${TATTOO_DESIGNS_MAX} tattoo designs (uploaded plus chosen) are allowed`,
+      );
+    }
+
     profile.answers = {
       ...(profile.answers ?? {}),
       [TATTOO_DESIGNS_QUESTION_ID]: input.assets.map((a) => ({
         path: a.path,
         mime: a.mime,
       })),
+      ...(input.catalogDesignIds === undefined
+        ? {}
+        : { [TATTOO_CATALOG_QUESTION_ID]: catalogDesigns }),
     };
     const saved = await this.profilesRepository.save(profile);
     return await this.toDto(contractId, saved, {

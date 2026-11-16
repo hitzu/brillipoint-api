@@ -2,6 +2,18 @@ import { BOOKING_PURPOSE } from '../../bookings/constants/booking_purpose.enum';
 
 export const TATTOO_DESIGNS_QUESTION_ID = 'tattoo_designs';
 export const TATTOO_DESIGNS_MAX = 5;
+// Chosen + uploaded designs share the same maximum (TATTOO_DESIGNS_MAX).
+export const TATTOO_CATALOG_QUESTION_ID = 'tattoo_catalog_designs';
+/** Frozen copy of the catalog row taken when the client chooses it. */
+export type TattooCatalogDesign = {
+  carouselId: number;
+  title: string;
+  imageUrl: string;
+};
+
+// The catalog is a page/section of the `carousels` table (global: no brand).
+export const TATTOO_CATALOG_PAGE = 'reservation';
+export const TATTOO_CATALOG_SECTION = 'tattoo-designs';
 /**
  * Products that enable the tattoo designs section when a contracted package
  * includes them: "Tatuajes personalizados" of Glitter bar (131) and of

@@ -2,7 +2,9 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsInt,
   IsNotEmpty,
+  IsOptional,
   IsString,
   ValidateNested,
 } from 'class-validator';
@@ -25,4 +27,11 @@ export class SetPrepProfileTattooDesignsDto {
   @ValidateNested({ each: true })
   @Type(() => PrepProfileTattooDesignAssetDto)
   assets!: PrepProfileTattooDesignAssetDto[];
+
+  /** Catalog designs (carousel row ids) to choose; omitted keeps the current choice. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(TATTOO_DESIGNS_MAX)
+  @IsInt({ each: true })
+  catalogDesignIds?: number[];
 }

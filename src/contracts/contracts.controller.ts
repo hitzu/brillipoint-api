@@ -179,6 +179,7 @@ export class ContractsController {
       token,
       phone: query.phone,
       assets: dto.assets,
+      catalogDesignIds: dto.catalogDesignIds,
       assetsMode: query.assets,
       expiresIn: query.expiresIn,
     });
