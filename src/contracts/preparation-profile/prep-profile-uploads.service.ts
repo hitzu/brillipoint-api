@@ -15,7 +15,7 @@ import { assertPrepProfileQuestionId } from './prep-profile.validation';
 import { StorageService } from '../../common/storage/storage.service';
 import {
   TATTOO_DESIGNS_QUESTION_ID,
-  hasGlitterBarPackage,
+  hasTattooDesignsProduct,
   isTattooDesignsClosed,
   resolveEventDate,
 } from './tattoo-designs.policy';
@@ -85,7 +85,12 @@ export class PrepProfileUploadsService {
       where: { token: input.token },
       select: { id: true, clientPhone: true },
       ...(isTattooDesigns
-        ? { relations: { bookings: true, items: { package: true } } }
+        ? {
+            relations: {
+              bookings: true,
+              items: { package: { packageProducts: true } },
+            },
+          }
         : {}),
     });
     if (!contract || !phonesMatch(contract.clientPhone ?? null, input.phone)) {
@@ -93,9 +98,9 @@ export class PrepProfileUploadsService {
     }
 
     if (isTattooDesigns) {
-      if (!hasGlitterBarPackage(contract.items)) {
+      if (!hasTattooDesignsProduct(contract.items)) {
         throw new UnprocessableEntityException(
-          'Contract has no Glitter bar package',
+          'Contract does not include tattoo designs',
         );
       }
       const eventDate = resolveEventDate(contract.bookings);

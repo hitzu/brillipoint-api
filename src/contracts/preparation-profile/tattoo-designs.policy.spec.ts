@@ -1,5 +1,6 @@
 import {
-  hasGlitterBarPackage,
+  hasTattooDesignsProduct,
+  TATTOO_DESIGNS_TRIGGER_PRODUCT_IDS,
   isTattooDesignsClosed,
   resolveEventDate,
 } from './tattoo-designs.policy';
@@ -48,17 +49,64 @@ describe('tattoo-designs.policy', () => {
     });
   });
 
-  describe('hasGlitterBarPackage', () => {
-    it('should be true only when some package belongs to brand 1', () => {
-      expect(hasGlitterBarPackage([{ package: { brandId: 2 } }])).toBe(false);
+  describe('hasTattooDesignsProduct', () => {
+    const [triggerProductId] = TATTOO_DESIGNS_TRIGGER_PRODUCT_IDS;
+
+    it('should trigger on the products "Tatuajes personalizados" of Glitter bar (131) and Photobooth (122)', () => {
+      expect([...TATTOO_DESIGNS_TRIGGER_PRODUCT_IDS].sort()).toEqual([
+        122, 131,
+      ]);
+    });
+
+    it('should be true when the contracted snapshot includes a trigger product', () => {
       expect(
-        hasGlitterBarPackage([
-          { package: { brandId: 2 } },
-          { package: { brandId: 1 } },
+        hasTattooDesignsProduct([
+          {
+            itemsSnapshot: [{ productId: 1 }, { productId: triggerProductId }],
+          },
         ]),
       ).toBe(true);
-      expect(hasGlitterBarPackage(undefined)).toBe(false);
-      expect(hasGlitterBarPackage([{ package: null }])).toBe(false);
+    });
+
+    it('should be false when no contracted product is a trigger product', () => {
+      expect(
+        hasTattooDesignsProduct([{ itemsSnapshot: [{ productId: 1 }] }]),
+      ).toBe(false);
+      expect(hasTattooDesignsProduct([])).toBe(false);
+      expect(hasTattooDesignsProduct(undefined)).toBe(false);
+    });
+
+    it('should fall back to the live package products when the line has no snapshot', () => {
+      expect(
+        hasTattooDesignsProduct([
+          {
+            itemsSnapshot: null,
+            package: { packageProducts: [{ productId: triggerProductId }] },
+          },
+        ]),
+      ).toBe(true);
+      expect(
+        hasTattooDesignsProduct([
+          {
+            itemsSnapshot: null,
+            package: { packageProducts: [{ productId: 1 }] },
+          },
+        ]),
+      ).toBe(false);
+      expect(
+        hasTattooDesignsProduct([{ itemsSnapshot: null, package: null }]),
+      ).toBe(false);
+    });
+
+    it('should trust the snapshot over the live package when both exist', () => {
+      expect(
+        hasTattooDesignsProduct([
+          {
+            itemsSnapshot: [{ productId: 1 }],
+            package: { packageProducts: [{ productId: triggerProductId }] },
+          },
+        ]),
+      ).toBe(false);
     });
   });
 });

@@ -23,7 +23,7 @@ import { PrepProfileUploadsService } from './prep-profile-uploads.service';
 import {
   TATTOO_DESIGNS_MAX,
   TATTOO_DESIGNS_QUESTION_ID,
-  hasGlitterBarPackage,
+  hasTattooDesignsProduct,
   isTattooDesignsClosed,
   resolveEventDate,
 } from './tattoo-designs.policy';
@@ -272,7 +272,7 @@ export class ContractsPreparationProfileService {
 
     const locked: Record<string, boolean> = { ...(profile?.locked ?? {}) };
     const tattoo = await this.getTattooContext(contractId);
-    if (tattoo.isGlitterBar && tattoo.closed) {
+    if (tattoo.isEnabled && tattoo.closed) {
       locked[TATTOO_DESIGNS_QUESTION_ID] = true;
     }
 
@@ -506,14 +506,17 @@ export class ContractsPreparationProfileService {
 
   private async getTattooContext(
     contractId: number,
-  ): Promise<{ isGlitterBar: boolean; closed: boolean }> {
+  ): Promise<{ isEnabled: boolean; closed: boolean }> {
     const contract = await this.contractsRepository.findOne({
       where: { id: contractId },
-      relations: { bookings: true, items: { package: true } },
+      relations: {
+        bookings: true,
+        items: { package: { packageProducts: true } },
+      },
     });
     const eventDate = resolveEventDate(contract?.bookings);
     return {
-      isGlitterBar: hasGlitterBarPackage(contract?.items),
+      isEnabled: hasTattooDesignsProduct(contract?.items),
       closed:
         eventDate != null && isTattooDesignsClosed(eventDate, new Date()),
     };
@@ -521,7 +524,7 @@ export class ContractsPreparationProfileService {
 
   /**
    * Replaces the whole list of tattoo designs (add, replace and delete are all
-   * "set the new list"). Open only for Glitter bar contracts, until 7 days
+   * "set the new list"). Open only for contracts that include a trigger product, until 7 days
    * before the event.
    */
   async setTattooDesigns(input: {
@@ -537,9 +540,9 @@ export class ContractsPreparationProfileService {
     );
 
     const tattoo = await this.getTattooContext(contractId);
-    if (!tattoo.isGlitterBar) {
+    if (!tattoo.isEnabled) {
       throw new UnprocessableEntityException(
-        'Contract has no Glitter bar package',
+        'Contract does not include tattoo designs',
       );
     }
     if (tattoo.closed) {

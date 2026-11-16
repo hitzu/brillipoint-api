@@ -2,7 +2,14 @@ import { BOOKING_PURPOSE } from '../../bookings/constants/booking_purpose.enum';
 
 export const TATTOO_DESIGNS_QUESTION_ID = 'tattoo_designs';
 export const TATTOO_DESIGNS_MAX = 5;
-export const GLITTER_BAR_BRAND_ID = 1;
+/**
+ * Products that enable the tattoo designs section when a contracted package
+ * includes them: "Tatuajes personalizados" of Glitter bar (131) and of
+ * Photobooth (122). Hardcoded for now; to move to the database. Keep in sync
+ * with TATTOO_DESIGNS_TRIGGER_PRODUCT_IDS in bookandsign-front
+ * (src/features/booking/utils/tattooDesigns.ts).
+ */
+export const TATTOO_DESIGNS_TRIGGER_PRODUCT_IDS: readonly number[] = [131, 122];
 export const TATTOO_DESIGNS_CLOSE_DAYS = 7;
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -36,10 +43,25 @@ export function resolveEventDate(
   return eventBooking?.eventDate ?? null;
 }
 
-export function hasGlitterBarPackage(
-  items: ReadonlyArray<{ package?: { brandId: number } | null }> | undefined,
+/**
+ * Same source as the contract detail `deliverables`: the product snapshot
+ * frozen at contracting time, falling back to the live package products for
+ * contracts created before snapshots existed.
+ */
+export function hasTattooDesignsProduct(
+  items:
+    | ReadonlyArray<{
+        itemsSnapshot?: ReadonlyArray<{ productId: number }> | null;
+        package?: {
+          packageProducts?: ReadonlyArray<{ productId: number }> | null;
+        } | null;
+      }>
+    | undefined,
 ): boolean {
-  return (items ?? []).some(
-    (item) => item.package?.brandId === GLITTER_BAR_BRAND_ID,
-  );
+  return (items ?? []).some((item) => {
+    const products = item.itemsSnapshot ?? item.package?.packageProducts ?? [];
+    return products.some((p) =>
+      TATTOO_DESIGNS_TRIGGER_PRODUCT_IDS.includes(p.productId),
+    );
+  });
 }
