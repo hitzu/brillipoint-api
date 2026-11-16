@@ -44,6 +44,7 @@ import { PatchPrepProfileAnswerDto } from './preparation-profile/dto/patch-prep-
 import { PatchPrepProfileAnswersBulkDto } from './preparation-profile/dto/patch-prep-profile-answers-bulk.dto';
 import { PrepProfileDto } from './preparation-profile/dto/prep-profile.dto';
 import { PrepProfilePublicQueryDto } from './preparation-profile/dto/prep-profile-public.query.dto';
+import { PrepProfileStaffQueryDto } from './preparation-profile/dto/prep-profile-staff.query.dto';
 import { SetPrepProfileTattooDesignsDto } from './preparation-profile/dto/set-prep-profile-tattoo-designs.dto';
 import { UnlockPrepProfileQuestionDto } from './preparation-profile/dto/unlock-prep-profile-question.dto';
 import { ContractsPreparationProfileService } from './preparation-profile/contracts-preparation-profile.service';
@@ -202,6 +203,21 @@ export class ContractsController {
       questionId: dto.questionId,
       fileName: dto.fileName,
       mime: dto.mime,
+    });
+  }
+
+  @Get(':id/prep-profile')
+  @ApiParam({ name: 'id', type: Number })
+  @ApiOkResponse({ type: PrepProfileDto })
+  async getPreparationProfile(
+    @Param('id', ParseIntPipe) id: number,
+    @Query(new ValidationPipe({ transform: true, whitelist: true }))
+    query: PrepProfileStaffQueryDto,
+  ): Promise<PrepProfileDto> {
+    return await this.contractsPreparationProfileService.getByContractId({
+      contractId: id,
+      assets: query.assets ?? 'signed',
+      expiresIn: query.expiresIn,
     });
   }
 

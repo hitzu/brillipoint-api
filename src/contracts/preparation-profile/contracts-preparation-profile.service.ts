@@ -306,6 +306,28 @@ export class ContractsPreparationProfileService {
     });
   }
 
+  /** Staff read: by contract id, no client phone (the controller is authenticated). */
+  async getByContractId(input: {
+    contractId: number;
+    assets?: PrepProfileAssetsMode;
+    expiresIn?: number;
+  }): Promise<PrepProfileDto> {
+    const contract = await this.contractsRepository.findOne({
+      where: { id: input.contractId },
+      select: { id: true },
+    });
+    if (!contract) {
+      throw new NotFoundException('Contract not found');
+    }
+    const profile = await this.profilesRepository.findOne({
+      where: { contractId: contract.id },
+    });
+    return await this.toDto(contract.id, profile, {
+      assets: input.assets,
+      expiresIn: input.expiresIn,
+    });
+  }
+
   async saveAnswerByPhone(input: {
     token: string;
     phone: string;
