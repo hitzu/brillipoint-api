@@ -19,15 +19,11 @@ import { ContractExtra } from '../entities/contract-extra.entity';
 import { ContractPreparationProfile } from '../entities/contract-preparation-profile.entity';
 import { ContractsPreparationProfileService } from './contracts-preparation-profile.service';
 import { PrepProfileUploadsService } from './prep-profile-uploads.service';
-import {
-  TATTOO_DESIGNS_TRIGGER_PRODUCT_IDS,
-  TATTOO_DESIGNS_QUESTION_ID,
-} from './tattoo-designs.policy';
+import { TATTOO_DESIGNS_QUESTION_ID } from './tattoo-designs.policy';
 
 const PHONE = '+52 (220) 175-2767';
-const [TRIGGER_PRODUCT_ID, SECOND_TRIGGER_PRODUCT_ID] =
-  TATTOO_DESIGNS_TRIGGER_PRODUCT_IDS;
-const NON_TRIGGER_PRODUCT_ID = 1;
+const TRIGGER_NAME = 'Tatuajes personalizados';
+const NON_TRIGGER_NAME = 'Maquillista';
 
 function daysFromToday(days: number): string {
   const d = new Date(Date.now() - 6 * 60 * 60 * 1000); // Mexico City civil date
@@ -77,9 +73,12 @@ describe('ContractsPreparationProfileService (Glitter bar tattoo designs)', () =
 
   async function createContract(options: {
     token: string;
-    productId: number;
-    /** Product delivered by a contracted extra instead of the package. */
-    extraProductId?: number;
+    /** Name of the package product (snapshot). */
+    productName: string;
+    /** Name of a contracted extra. */
+    extraName?: string;
+    /** Name of a product delivered by that extra (snapshot). */
+    extraProductName?: string;
     eventDate: string | null;
   }): Promise<Contract> {
     const contract = await contractFactory.create({
@@ -90,11 +89,9 @@ describe('ContractsPreparationProfileService (Glitter bar tattoo designs)', () =
     await contractPackageFactory.createForContractAndPackage(contract, pkg, {
       nameSnapshot: pkg.name,
       basePriceSnapshot: pkg.basePrice,
-      itemsSnapshot: [
-        { productId: options.productId, name: 'Producto', quantity: 1 },
-      ],
+      itemsSnapshot: [{ productId: 1, name: options.productName, quantity: 1 }],
     });
-    if (options.extraProductId != null) {
+    if (options.extraName != null || options.extraProductName != null) {
       const extra = await extraFactory.createForBrand(
         await new BrandFactory(TestDataSource).create(),
       );
@@ -102,11 +99,18 @@ describe('ContractsPreparationProfileService (Glitter bar tattoo designs)', () =
         TestDataSource.getRepository(ContractExtra).create({
           contractId: contract.id,
           extraId: extra.id,
-          nameSnapshot: extra.name,
+          nameSnapshot: options.extraName ?? extra.name,
           basePriceSnapshot: 100,
-          itemsSnapshot: [
-            { productId: options.extraProductId, name: 'Extra', quantity: 1 },
-          ],
+          itemsSnapshot:
+            options.extraProductName == null
+              ? []
+              : [
+                  {
+                    productId: 1,
+                    name: options.extraProductName,
+                    quantity: 1,
+                  },
+                ],
         }),
       );
     }
@@ -130,7 +134,7 @@ describe('ContractsPreparationProfileService (Glitter bar tattoo designs)', () =
     it('should save up to 5 designs while the event is more than 7 days away', async () => {
       const contract = await createContract({
         token: 'tattoo-ok',
-        productId: TRIGGER_PRODUCT_ID,
+        productName: TRIGGER_NAME,
         eventDate: daysFromToday(30),
       });
 
@@ -148,8 +152,8 @@ describe('ContractsPreparationProfileService (Glitter bar tattoo designs)', () =
     it('should accept a contract whose trigger product comes from a paid extra', async () => {
       const contract = await createContract({
         token: 'tattoo-extra',
-        productId: NON_TRIGGER_PRODUCT_ID,
-        extraProductId: TRIGGER_PRODUCT_ID,
+        productName: NON_TRIGGER_NAME,
+        extraProductName: TRIGGER_NAME,
         eventDate: daysFromToday(30),
       });
 
@@ -162,10 +166,11 @@ describe('ContractsPreparationProfileService (Glitter bar tattoo designs)', () =
       expect(res.answers[TATTOO_DESIGNS_QUESTION_ID]).toHaveLength(1);
     });
 
-    it('should accept a contract that includes the other trigger product (Photobooth)', async () => {
+    it('should accept a contract whose paid extra is named after the tattoo designs, even without products', async () => {
       const contract = await createContract({
         token: 'tattoo-photobooth',
-        productId: SECOND_TRIGGER_PRODUCT_ID,
+        productName: NON_TRIGGER_NAME,
+        extraName: 'Tatuajes personalizados (precio especial)',
         eventDate: daysFromToday(30),
       });
 
@@ -181,7 +186,7 @@ describe('ContractsPreparationProfileService (Glitter bar tattoo designs)', () =
     it('should reject a 6th design and persist nothing', async () => {
       const contract = await createContract({
         token: 'tattoo-six',
-        productId: TRIGGER_PRODUCT_ID,
+        productName: TRIGGER_NAME,
         eventDate: daysFromToday(30),
       });
 
@@ -203,7 +208,7 @@ describe('ContractsPreparationProfileService (Glitter bar tattoo designs)', () =
     it('should replace and delete designs before the closing date', async () => {
       const contract = await createContract({
         token: 'tattoo-replace',
-        productId: TRIGGER_PRODUCT_ID,
+        productName: TRIGGER_NAME,
         eventDate: daysFromToday(30),
       });
       await service.setTattooDesigns({
@@ -230,7 +235,7 @@ describe('ContractsPreparationProfileService (Glitter bar tattoo designs)', () =
     it('should reject uploads, replacements and deletes 7 days or less before the event', async () => {
       const contract = await createContract({
         token: 'tattoo-closed',
-        productId: TRIGGER_PRODUCT_ID,
+        productName: TRIGGER_NAME,
         eventDate: daysFromToday(7),
       });
 
@@ -253,7 +258,7 @@ describe('ContractsPreparationProfileService (Glitter bar tattoo designs)', () =
     it('should reject a contract without a tattoo designs product', async () => {
       const contract = await createContract({
         token: 'tattoo-makeup',
-        productId: NON_TRIGGER_PRODUCT_ID,
+        productName: NON_TRIGGER_NAME,
         eventDate: daysFromToday(30),
       });
 
@@ -269,7 +274,7 @@ describe('ContractsPreparationProfileService (Glitter bar tattoo designs)', () =
     it('should reject assets that do not live under this contract tattoo folder', async () => {
       const contract = await createContract({
         token: 'tattoo-foreign',
-        productId: TRIGGER_PRODUCT_ID,
+        productName: TRIGGER_NAME,
         eventDate: daysFromToday(30),
       });
 
@@ -290,7 +295,7 @@ describe('ContractsPreparationProfileService (Glitter bar tattoo designs)', () =
     it('should reject non-image assets', async () => {
       const contract = await createContract({
         token: 'tattoo-mime',
-        productId: TRIGGER_PRODUCT_ID,
+        productName: TRIGGER_NAME,
         eventDate: daysFromToday(30),
       });
 
@@ -311,7 +316,7 @@ describe('ContractsPreparationProfileService (Glitter bar tattoo designs)', () =
     it('should require a valid token and phone', async () => {
       await createContract({
         token: 'tattoo-auth',
-        productId: TRIGGER_PRODUCT_ID,
+        productName: TRIGGER_NAME,
         eventDate: daysFromToday(30),
       });
 
@@ -332,7 +337,7 @@ describe('ContractsPreparationProfileService (Glitter bar tattoo designs)', () =
     it('should report tattoo_designs as locked (read-only) once the closing date has passed', async () => {
       const contract = await createContract({
         token: 'tattoo-read-only',
-        productId: TRIGGER_PRODUCT_ID,
+        productName: TRIGGER_NAME,
         eventDate: daysFromToday(30),
       });
       await service.setTattooDesigns({
@@ -357,7 +362,7 @@ describe('ContractsPreparationProfileService (Glitter bar tattoo designs)', () =
     it('should not mark tattoo_designs locked for a Make up contract (unchanged behavior)', async () => {
       await createContract({
         token: 'tattoo-makeup-get',
-        productId: NON_TRIGGER_PRODUCT_ID,
+        productName: NON_TRIGGER_NAME,
         eventDate: daysFromToday(3),
       });
 
@@ -374,7 +379,7 @@ describe('ContractsPreparationProfileService (Glitter bar tattoo designs)', () =
     it('should refuse tattoo_designs through the generic answer endpoints', async () => {
       const contract = await createContract({
         token: 'tattoo-generic',
-        productId: TRIGGER_PRODUCT_ID,
+        productName: TRIGGER_NAME,
         eventDate: daysFromToday(30),
       });
 

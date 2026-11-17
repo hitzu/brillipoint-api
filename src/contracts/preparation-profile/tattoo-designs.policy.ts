@@ -15,14 +15,6 @@ export type TattooCatalogDesign = {
 // The catalog is a page/section of the `carousels` table (global: no brand).
 export const TATTOO_CATALOG_PAGE = 'reservation';
 export const TATTOO_CATALOG_SECTION = 'tattoo-designs';
-/**
- * Products that enable the tattoo designs section when a contracted package
- * includes them: "Tatuajes personalizados" of Glitter bar (131) and of
- * Photobooth (122). Hardcoded for now; to move to the database. Keep in sync
- * with TATTOO_DESIGNS_TRIGGER_PRODUCT_IDS in bookandsign-front
- * (src/features/booking/utils/tattooDesigns.ts).
- */
-export const TATTOO_DESIGNS_TRIGGER_PRODUCT_IDS: readonly number[] = [131, 122];
 export const TATTOO_DESIGNS_CLOSE_DAYS = 7;
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -57,44 +49,64 @@ export function resolveEventDate(
 }
 
 /**
- * Same source as the contract detail `deliverables`: the product snapshot
- * frozen at contracting time, falling back to the live package products for
- * contracts created before snapshots existed.
+ * The section is enabled by NAME, not by ids (ids differ between stages and
+ * change when a product is recreated): any contracted product or paid extra
+ * whose name says both "tatuajes" and "personalizados". A stable product key
+ * is planned to replace this.
  */
-export function hasTattooDesignsProduct(
+export function isTattooDesignsName(name: string | null | undefined): boolean {
+  const normalized = (name ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  return normalized.includes('tatuaj') && normalized.includes('personaliz');
+}
+
+/**
+ * Same source as the contract detail `deliverables`: the product snapshot
+ * frozen at contracting time (it carries the product name), falling back to the
+ * live package/extra products for contracts created before snapshots existed.
+ * A paid extra also counts by its own name.
+ */
+export function hasTattooDesignsTrigger(
   packages:
     | ReadonlyArray<{
-        itemsSnapshot?: ReadonlyArray<{ productId: number }> | null;
+        itemsSnapshot?: ReadonlyArray<{ name: string }> | null;
         package?: {
-          packageProducts?: ReadonlyArray<{ productId: number }> | null;
+          packageProducts?: ReadonlyArray<{
+            product?: { name: string } | null;
+          }> | null;
         } | null;
       }>
     | undefined,
   extras?: ReadonlyArray<{
-    itemsSnapshot?: ReadonlyArray<{ productId: number }> | null;
+    nameSnapshot?: string | null;
+    itemsSnapshot?: ReadonlyArray<{ name: string }> | null;
     extra?: {
       extraProducts?: ReadonlyArray<{
-        productId: number;
         action: string;
+        product?: { name: string } | null;
       }> | null;
     } | null;
   }>,
 ): boolean {
-  const isTrigger = (p: { productId: number }) =>
-    TATTOO_DESIGNS_TRIGGER_PRODUCT_IDS.includes(p.productId);
-
-  const inPackages = (packages ?? []).some((line) =>
-    (line.itemsSnapshot ?? line.package?.packageProducts ?? []).some(isTrigger),
-  );
+  const inPackages = (packages ?? []).some((line) => {
+    const names =
+      line.itemsSnapshot?.map((item) => item.name) ??
+      (line.package?.packageProducts ?? []).map((p) => p.product?.name);
+    return names.some(isTattooDesignsName);
+  });
   // A paid extra delivers the products it adds; the ones it removes belong to
   // the package and never count.
-  const inExtras = (extras ?? []).some((line) =>
-    (
-      line.itemsSnapshot ??
-      (line.extra?.extraProducts ?? []).filter(
-        (p) => p.action === (EXTRA_PRODUCT_ACTION.ADD as string),
-      )
-    ).some(isTrigger),
-  );
+  const inExtras = (extras ?? []).some((line) => {
+    const names =
+      line.itemsSnapshot?.map((item) => item.name) ??
+      (line.extra?.extraProducts ?? [])
+        .filter((p) => p.action === (EXTRA_PRODUCT_ACTION.ADD as string))
+        .map((p) => p.product?.name);
+    return (
+      isTattooDesignsName(line.nameSnapshot) || names.some(isTattooDesignsName)
+    );
+  });
   return inPackages || inExtras;
 }

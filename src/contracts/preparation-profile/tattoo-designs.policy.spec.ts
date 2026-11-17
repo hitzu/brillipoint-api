@@ -1,6 +1,6 @@
 import {
-  hasTattooDesignsProduct,
-  TATTOO_DESIGNS_TRIGGER_PRODUCT_IDS,
+  hasTattooDesignsTrigger,
+  isTattooDesignsName,
   isTattooDesignsClosed,
   resolveEventDate,
 } from './tattoo-designs.policy';
@@ -49,141 +49,159 @@ describe('tattoo-designs.policy', () => {
     });
   });
 
-  describe('hasTattooDesignsProduct', () => {
-    const [triggerProductId] = TATTOO_DESIGNS_TRIGGER_PRODUCT_IDS;
-
-    it('should trigger on the products "Tatuajes personalizados" of Glitter bar (131) and Photobooth (122)', () => {
-      expect([...TATTOO_DESIGNS_TRIGGER_PRODUCT_IDS].sort()).toEqual([
-        122, 131,
-      ]);
+  describe('isTattooDesignsName', () => {
+    it.each([
+      'Tatuajes personalizados',
+      'TATUAJES PERSONALIZADOS',
+      'Tatuajes personalizados (precio especial)',
+      'Tatuaje personalizado',
+      'Diseños personalizados de tatuajes',
+      '  tatuajes   personalizados  ',
+    ])('should match "%s"', (name) => {
+      expect(isTattooDesignsName(name)).toBe(true);
     });
 
-    it('should be true when the contracted snapshot includes a trigger product', () => {
+    it.each([
+      'Tatuajes temporales',
+      'Glitter tattoo',
+      'Accesorios personalizados',
+      'Personalización de fotos dentro de la galería',
+      '',
+      null,
+      undefined,
+    ])('should not match %p', (name) => {
+      expect(isTattooDesignsName(name)).toBe(false);
+    });
+
+    it('should ignore accents', () => {
+      expect(isTattooDesignsName('Tátuajes personalizádos')).toBe(true);
+    });
+  });
+
+  describe('hasTattooDesignsTrigger', () => {
+    it('should trigger when a contracted package product has a matching name in its snapshot', () => {
       expect(
-        hasTattooDesignsProduct([
+        hasTattooDesignsTrigger([
           {
-            itemsSnapshot: [{ productId: 1 }, { productId: triggerProductId }],
+            itemsSnapshot: [
+              { name: 'Glitter' },
+              { name: 'Tatuajes personalizados' },
+            ],
           },
         ]),
       ).toBe(true);
     });
 
-    it('should be false when no contracted product is a trigger product', () => {
+    it('should be false when no contracted product name matches', () => {
       expect(
-        hasTattooDesignsProduct([{ itemsSnapshot: [{ productId: 1 }] }]),
+        hasTattooDesignsTrigger([
+          { itemsSnapshot: [{ name: 'Tatuajes temporales' }] },
+        ]),
       ).toBe(false);
-      expect(hasTattooDesignsProduct([])).toBe(false);
-      expect(hasTattooDesignsProduct(undefined)).toBe(false);
+      expect(hasTattooDesignsTrigger([])).toBe(false);
+      expect(hasTattooDesignsTrigger(undefined)).toBe(false);
     });
 
-    it('should fall back to the live package products when the line has no snapshot', () => {
+    it('should fall back to the live package product names when the line has no snapshot', () => {
       expect(
-        hasTattooDesignsProduct([
+        hasTattooDesignsTrigger([
           {
             itemsSnapshot: null,
-            package: { packageProducts: [{ productId: triggerProductId }] },
+            package: {
+              packageProducts: [
+                { product: { name: 'Tatuajes personalizados' } },
+              ],
+            },
           },
         ]),
       ).toBe(true);
       expect(
-        hasTattooDesignsProduct([
+        hasTattooDesignsTrigger([
           {
             itemsSnapshot: null,
-            package: { packageProducts: [{ productId: 1 }] },
+            package: {
+              packageProducts: [
+                { product: { name: 'Glitter' } },
+                { product: null },
+              ],
+            },
           },
         ]),
       ).toBe(false);
       expect(
-        hasTattooDesignsProduct([{ itemsSnapshot: null, package: null }]),
+        hasTattooDesignsTrigger([{ itemsSnapshot: null, package: null }]),
       ).toBe(false);
     });
 
     it('should trust the snapshot over the live package when both exist', () => {
       expect(
-        hasTattooDesignsProduct([
+        hasTattooDesignsTrigger([
           {
-            itemsSnapshot: [{ productId: 1 }],
-            package: { packageProducts: [{ productId: triggerProductId }] },
+            itemsSnapshot: [{ name: 'Glitter' }],
+            package: {
+              packageProducts: [
+                { product: { name: 'Tatuajes personalizados' } },
+              ],
+            },
           },
         ]),
       ).toBe(false);
     });
 
     describe('contracted extras', () => {
-      const [triggerProductId] = TATTOO_DESIGNS_TRIGGER_PRODUCT_IDS;
-
-      it('should trigger when a contracted extra snapshot includes a trigger product', () => {
+      it('should trigger on the extra name itself, even when the extra has no products', () => {
         expect(
-          hasTattooDesignsProduct(
-            [{ itemsSnapshot: [{ productId: 1 }] }],
-            [{ itemsSnapshot: [{ productId: triggerProductId }] }],
+          hasTattooDesignsTrigger(
+            [{ itemsSnapshot: [{ name: 'Glitter' }] }],
+            [
+              {
+                nameSnapshot: 'Tatuajes personalizados (precio especial)',
+                itemsSnapshot: [],
+              },
+            ],
           ),
         ).toBe(true);
       });
 
-      it('should work with extras only (no package trigger)', () => {
+      it('should trigger when a product delivered by the extra matches', () => {
         expect(
-          hasTattooDesignsProduct(undefined, [
-            { itemsSnapshot: [{ productId: triggerProductId }] },
+          hasTattooDesignsTrigger(undefined, [
+            {
+              nameSnapshot: 'Beneficio a elegir',
+              itemsSnapshot: [{ name: 'Tatuajes personalizados' }],
+            },
           ]),
         ).toBe(true);
+      });
+
+      it('should be false when neither the extra name nor its products match', () => {
         expect(
-          hasTattooDesignsProduct([], [{ itemsSnapshot: [{ productId: 1 }] }]),
+          hasTattooDesignsTrigger(
+            [],
+            [
+              {
+                nameSnapshot: '1 hora extra',
+                itemsSnapshot: [{ name: 'Maquillista' }],
+              },
+            ],
+          ),
         ).toBe(false);
       });
 
       it('should fall back to the live extra products that are added, never the removed ones', () => {
-        expect(
-          hasTattooDesignsProduct(
-            [],
-            [
-              {
-                itemsSnapshot: null,
-                extra: {
-                  extraProducts: [
-                    { productId: triggerProductId, action: 'add' },
-                  ],
-                },
-              },
-            ],
-          ),
-        ).toBe(true);
-        expect(
-          hasTattooDesignsProduct(
-            [],
-            [
-              {
-                itemsSnapshot: null,
-                extra: {
-                  extraProducts: [
-                    { productId: triggerProductId, action: 'remove' },
-                  ],
-                },
-              },
-            ],
-          ),
-        ).toBe(false);
-        expect(
-          hasTattooDesignsProduct([], [{ itemsSnapshot: null, extra: null }]),
-        ).toBe(false);
-      });
-
-      it('should trust the extra snapshot over the live extra when both exist', () => {
-        expect(
-          hasTattooDesignsProduct(
-            [],
-            [
-              {
-                itemsSnapshot: [{ productId: 1 }],
-                extra: {
-                  extraProducts: [
-                    { productId: triggerProductId, action: 'add' },
-                  ],
-                },
-              },
-            ],
-          ),
-        ).toBe(false);
+        const live = (action: string) => [
+          {
+            nameSnapshot: 'Beneficio a elegir',
+            itemsSnapshot: null,
+            extra: {
+              extraProducts: [
+                { action, product: { name: 'Tatuajes personalizados' } },
+              ],
+            },
+          },
+        ];
+        expect(hasTattooDesignsTrigger([], live('add'))).toBe(true);
+        expect(hasTattooDesignsTrigger([], live('remove'))).toBe(false);
       });
     });
   });

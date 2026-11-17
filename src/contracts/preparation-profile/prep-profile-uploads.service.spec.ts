@@ -408,7 +408,7 @@ describe('PrepProfileUploadsService', () => {
       return d.toISOString().slice(0, 10);
     }
 
-    function mockContract(options: { productId: number; eventDate: string }) {
+    function mockContract(options: { productName: string; eventDate: string }) {
       (assertPrepProfileQuestionId as unknown as jest.Mock).mockReturnValue({
         id: 'tattoo_designs',
         type: 'asset_array',
@@ -417,7 +417,7 @@ describe('PrepProfileUploadsService', () => {
         id: 7,
         clientPhone: phone,
         bookings: [{ purpose: 'event', eventDate: options.eventDate }],
-        items: [{ itemsSnapshot: [{ productId: options.productId }] }],
+        items: [{ itemsSnapshot: [{ name: options.productName }] }],
       });
       storageCreateSignedUploadUrl.mockResolvedValue({
         data: { signedUrl: 'https://signed-upload-url', token: 'upload-token' },
@@ -426,7 +426,7 @@ describe('PrepProfileUploadsService', () => {
     }
 
     it('should issue an upload URL under the tattoo folder while the window is open', async () => {
-      mockContract({ productId: 131, eventDate: daysFromToday(30) });
+      mockContract({ productName: 'Tatuajes personalizados', eventDate: daysFromToday(30) });
 
       const res = await service.createSignedUploadUrl(input);
 
@@ -434,7 +434,7 @@ describe('PrepProfileUploadsService', () => {
     });
 
     it('should refuse an upload URL 7 days or less before the event', async () => {
-      mockContract({ productId: 131, eventDate: daysFromToday(7) });
+      mockContract({ productName: 'Tatuajes personalizados', eventDate: daysFromToday(7) });
 
       await expect(service.createSignedUploadUrl(input)).rejects.toBeInstanceOf(
         ConflictException,
@@ -443,7 +443,7 @@ describe('PrepProfileUploadsService', () => {
     });
 
     it('should refuse an upload URL for a contract without a tattoo designs product', async () => {
-      mockContract({ productId: 1, eventDate: daysFromToday(30) });
+      mockContract({ productName: 'Maquillista', eventDate: daysFromToday(30) });
 
       await expect(service.createSignedUploadUrl(input)).rejects.toBeInstanceOf(
         UnprocessableEntityException,
@@ -452,7 +452,7 @@ describe('PrepProfileUploadsService', () => {
     });
 
     it('should refuse non-image mime types', async () => {
-      mockContract({ productId: 131, eventDate: daysFromToday(30) });
+      mockContract({ productName: 'Tatuajes personalizados', eventDate: daysFromToday(30) });
 
       await expect(
         service.createSignedUploadUrl({ ...input, mime: 'application/pdf' }),

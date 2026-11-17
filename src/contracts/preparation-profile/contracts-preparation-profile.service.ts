@@ -27,7 +27,7 @@ import {
   TATTOO_CATALOG_SECTION,
   TATTOO_DESIGNS_MAX,
   TATTOO_DESIGNS_QUESTION_ID,
-  hasTattooDesignsProduct,
+  hasTattooDesignsTrigger,
   isTattooDesignsClosed,
   resolveEventDate,
   type TattooCatalogDesign,
@@ -529,13 +529,13 @@ export class ContractsPreparationProfileService {
       where: { id: contractId },
       relations: {
         bookings: true,
-        items: { package: { packageProducts: true } },
-        extras: { extra: { extraProducts: true } },
+        items: { package: { packageProducts: { product: true } } },
+        extras: { extra: { extraProducts: { product: true } } },
       },
     });
     const eventDate = resolveEventDate(contract?.bookings);
     return {
-      isEnabled: hasTattooDesignsProduct(contract?.items, contract?.extras),
+      isEnabled: hasTattooDesignsTrigger(contract?.items, contract?.extras),
       closed:
         eventDate != null && isTattooDesignsClosed(eventDate, new Date()),
     };
@@ -543,7 +543,7 @@ export class ContractsPreparationProfileService {
 
   /**
    * Replaces the whole list of tattoo designs (add, replace and delete are all
-   * "set the new list"). Open only for contracts that include a trigger product, until 7 days
+   * "set the new list"). Open only for contracts with a tattoo designs product or extra, until 7 days
    * before the event.
    */
   /**

@@ -21,11 +21,10 @@ import {
   TATTOO_CATALOG_QUESTION_ID,
   TATTOO_CATALOG_SECTION,
   TATTOO_DESIGNS_QUESTION_ID,
-  TATTOO_DESIGNS_TRIGGER_PRODUCT_IDS,
 } from './tattoo-designs.policy';
 
 const PHONE = '+52 (220) 175-2767';
-const [TRIGGER_PRODUCT_ID] = TATTOO_DESIGNS_TRIGGER_PRODUCT_IDS;
+const TRIGGER_NAME = 'Tatuajes personalizados';
 
 function daysFromToday(days: number): string {
   const d = new Date(Date.now() - 6 * 60 * 60 * 1000); // Mexico City civil date
@@ -73,7 +72,7 @@ describe('ContractsPreparationProfileService (tattoo catalog designs)', () => {
 
   async function createContract(options: {
     token: string;
-    productId?: number;
+    productName?: string;
     eventDate?: string;
   }): Promise<Contract> {
     const contract = await contractFactory.create({
@@ -86,8 +85,8 @@ describe('ContractsPreparationProfileService (tattoo catalog designs)', () => {
       basePriceSnapshot: pkg.basePrice,
       itemsSnapshot: [
         {
-          productId: options.productId ?? TRIGGER_PRODUCT_ID,
-          name: 'Producto',
+          productId: 1,
+          name: options.productName ?? TRIGGER_NAME,
           quantity: 1,
         },
       ],
@@ -303,7 +302,10 @@ describe('ContractsPreparationProfileService (tattoo catalog designs)', () => {
   });
 
   it('should reject a contract without a tattoo designs product', async () => {
-    await createContract({ token: 'cat-noproduct', productId: 1 });
+    await createContract({
+      token: 'cat-noproduct',
+      productName: 'Maquillista',
+    });
     const row = await createCatalogRow();
 
     await expect(
