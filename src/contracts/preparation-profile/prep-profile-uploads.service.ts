@@ -89,6 +89,7 @@ export class PrepProfileUploadsService {
             relations: {
               bookings: true,
               items: { package: { packageProducts: true } },
+              extras: { extra: { extraProducts: true } },
             },
           }
         : {}),
@@ -98,7 +99,7 @@ export class PrepProfileUploadsService {
     }
 
     if (isTattooDesigns) {
-      if (!hasTattooDesignsProduct(contract.items)) {
+      if (!hasTattooDesignsProduct(contract.items, contract.extras)) {
         throw new UnprocessableEntityException(
           'Contract does not include tattoo designs',
         );

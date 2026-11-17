@@ -530,11 +530,12 @@ export class ContractsPreparationProfileService {
       relations: {
         bookings: true,
         items: { package: { packageProducts: true } },
+        extras: { extra: { extraProducts: true } },
       },
     });
     const eventDate = resolveEventDate(contract?.bookings);
     return {
-      isEnabled: hasTattooDesignsProduct(contract?.items),
+      isEnabled: hasTattooDesignsProduct(contract?.items, contract?.extras),
       closed:
         eventDate != null && isTattooDesignsClosed(eventDate, new Date()),
     };

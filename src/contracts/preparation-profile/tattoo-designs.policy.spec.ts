@@ -108,5 +108,83 @@ describe('tattoo-designs.policy', () => {
         ]),
       ).toBe(false);
     });
+
+    describe('contracted extras', () => {
+      const [triggerProductId] = TATTOO_DESIGNS_TRIGGER_PRODUCT_IDS;
+
+      it('should trigger when a contracted extra snapshot includes a trigger product', () => {
+        expect(
+          hasTattooDesignsProduct(
+            [{ itemsSnapshot: [{ productId: 1 }] }],
+            [{ itemsSnapshot: [{ productId: triggerProductId }] }],
+          ),
+        ).toBe(true);
+      });
+
+      it('should work with extras only (no package trigger)', () => {
+        expect(
+          hasTattooDesignsProduct(undefined, [
+            { itemsSnapshot: [{ productId: triggerProductId }] },
+          ]),
+        ).toBe(true);
+        expect(
+          hasTattooDesignsProduct([], [{ itemsSnapshot: [{ productId: 1 }] }]),
+        ).toBe(false);
+      });
+
+      it('should fall back to the live extra products that are added, never the removed ones', () => {
+        expect(
+          hasTattooDesignsProduct(
+            [],
+            [
+              {
+                itemsSnapshot: null,
+                extra: {
+                  extraProducts: [
+                    { productId: triggerProductId, action: 'add' },
+                  ],
+                },
+              },
+            ],
+          ),
+        ).toBe(true);
+        expect(
+          hasTattooDesignsProduct(
+            [],
+            [
+              {
+                itemsSnapshot: null,
+                extra: {
+                  extraProducts: [
+                    { productId: triggerProductId, action: 'remove' },
+                  ],
+                },
+              },
+            ],
+          ),
+        ).toBe(false);
+        expect(
+          hasTattooDesignsProduct([], [{ itemsSnapshot: null, extra: null }]),
+        ).toBe(false);
+      });
+
+      it('should trust the extra snapshot over the live extra when both exist', () => {
+        expect(
+          hasTattooDesignsProduct(
+            [],
+            [
+              {
+                itemsSnapshot: [{ productId: 1 }],
+                extra: {
+                  extraProducts: [
+                    { productId: triggerProductId, action: 'add' },
+                  ],
+                },
+              },
+            ],
+          ),
+        ).toBe(false);
+      });
+    });
   });
 });

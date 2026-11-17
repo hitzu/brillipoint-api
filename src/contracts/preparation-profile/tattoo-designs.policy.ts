@@ -1,4 +1,5 @@
 import { BOOKING_PURPOSE } from '../../bookings/constants/booking_purpose.enum';
+import { EXTRA_PRODUCT_ACTION } from '../../extras/types/extra-product-action.types';
 
 export const TATTOO_DESIGNS_QUESTION_ID = 'tattoo_designs';
 export const TATTOO_DESIGNS_MAX = 5;
@@ -61,7 +62,7 @@ export function resolveEventDate(
  * contracts created before snapshots existed.
  */
 export function hasTattooDesignsProduct(
-  items:
+  packages:
     | ReadonlyArray<{
         itemsSnapshot?: ReadonlyArray<{ productId: number }> | null;
         package?: {
@@ -69,11 +70,31 @@ export function hasTattooDesignsProduct(
         } | null;
       }>
     | undefined,
+  extras?: ReadonlyArray<{
+    itemsSnapshot?: ReadonlyArray<{ productId: number }> | null;
+    extra?: {
+      extraProducts?: ReadonlyArray<{
+        productId: number;
+        action: string;
+      }> | null;
+    } | null;
+  }>,
 ): boolean {
-  return (items ?? []).some((item) => {
-    const products = item.itemsSnapshot ?? item.package?.packageProducts ?? [];
-    return products.some((p) =>
-      TATTOO_DESIGNS_TRIGGER_PRODUCT_IDS.includes(p.productId),
-    );
-  });
+  const isTrigger = (p: { productId: number }) =>
+    TATTOO_DESIGNS_TRIGGER_PRODUCT_IDS.includes(p.productId);
+
+  const inPackages = (packages ?? []).some((line) =>
+    (line.itemsSnapshot ?? line.package?.packageProducts ?? []).some(isTrigger),
+  );
+  // A paid extra delivers the products it adds; the ones it removes belong to
+  // the package and never count.
+  const inExtras = (extras ?? []).some((line) =>
+    (
+      line.itemsSnapshot ??
+      (line.extra?.extraProducts ?? []).filter(
+        (p) => p.action === (EXTRA_PRODUCT_ACTION.ADD as string),
+      )
+    ).some(isTrigger),
+  );
+  return inPackages || inExtras;
 }

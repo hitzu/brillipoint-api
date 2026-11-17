@@ -7,12 +7,15 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
 import { BookingFactory } from '@factories/bookings/booking.factory';
+import { BrandFactory } from '@factories/brands/brands.factories';
+import { ExtraFactory } from '@factories/extras/extra.factory';
 import { ContractFactory } from '@factories/contracts/contract.factory';
 import { ContractPackageFactory } from '@factories/contracts/contract-package.factory';
 import { PackageFactory } from '@factories/packages/package.factory';
 import { BOOKING_PURPOSE } from '../../bookings/constants/booking_purpose.enum';
 import { AppDataSource as TestDataSource } from '../../config/database/data-source';
 import { Contract } from '../entities/contract.entity';
+import { ContractExtra } from '../entities/contract-extra.entity';
 import { ContractPreparationProfile } from '../entities/contract-preparation-profile.entity';
 import { ContractsPreparationProfileService } from './contracts-preparation-profile.service';
 import { PrepProfileUploadsService } from './prep-profile-uploads.service';
@@ -38,6 +41,7 @@ describe('ContractsPreparationProfileService (Glitter bar tattoo designs)', () =
   let packageFactory: PackageFactory;
   let contractPackageFactory: ContractPackageFactory;
   let bookingFactory: BookingFactory;
+  let extraFactory: ExtraFactory;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -68,11 +72,14 @@ describe('ContractsPreparationProfileService (Glitter bar tattoo designs)', () =
     packageFactory = new PackageFactory(TestDataSource);
     contractPackageFactory = new ContractPackageFactory(TestDataSource);
     bookingFactory = new BookingFactory(TestDataSource);
+    extraFactory = new ExtraFactory(TestDataSource);
   });
 
   async function createContract(options: {
     token: string;
     productId: number;
+    /** Product delivered by a contracted extra instead of the package. */
+    extraProductId?: number;
     eventDate: string | null;
   }): Promise<Contract> {
     const contract = await contractFactory.create({
@@ -87,6 +94,22 @@ describe('ContractsPreparationProfileService (Glitter bar tattoo designs)', () =
         { productId: options.productId, name: 'Producto', quantity: 1 },
       ],
     });
+    if (options.extraProductId != null) {
+      const extra = await extraFactory.createForBrand(
+        await new BrandFactory(TestDataSource).create(),
+      );
+      await TestDataSource.getRepository(ContractExtra).save(
+        TestDataSource.getRepository(ContractExtra).create({
+          contractId: contract.id,
+          extraId: extra.id,
+          nameSnapshot: extra.name,
+          basePriceSnapshot: 100,
+          itemsSnapshot: [
+            { productId: options.extraProductId, name: 'Extra', quantity: 1 },
+          ],
+        }),
+      );
+    }
     if (options.eventDate) {
       await bookingFactory.create({
         contractId: contract.id,
@@ -120,6 +143,23 @@ describe('ContractsPreparationProfileService (Glitter bar tattoo designs)', () =
       expect(res.contractId).toBe(contract.id);
       expect(res.answers[TATTOO_DESIGNS_QUESTION_ID]).toHaveLength(5);
       expect(res.locked[TATTOO_DESIGNS_QUESTION_ID]).not.toBe(true);
+    });
+
+    it('should accept a contract whose trigger product comes from a paid extra', async () => {
+      const contract = await createContract({
+        token: 'tattoo-extra',
+        productId: NON_TRIGGER_PRODUCT_ID,
+        extraProductId: TRIGGER_PRODUCT_ID,
+        eventDate: daysFromToday(30),
+      });
+
+      const res = await service.setTattooDesigns({
+        token: 'tattoo-extra',
+        phone: PHONE,
+        assets: assets(contract.id, 1),
+      });
+
+      expect(res.answers[TATTOO_DESIGNS_QUESTION_ID]).toHaveLength(1);
     });
 
     it('should accept a contract that includes the other trigger product (Photobooth)', async () => {
