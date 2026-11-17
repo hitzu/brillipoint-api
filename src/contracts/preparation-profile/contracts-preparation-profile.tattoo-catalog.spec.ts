@@ -19,7 +19,10 @@ import { PrepProfileUploadsService } from './prep-profile-uploads.service';
 import {
   TATTOO_CATALOG_PAGE,
   TATTOO_CATALOG_QUESTION_ID,
-  TATTOO_CATALOG_SECTION,
+  PHOTO_EXAMPLES_SECTION,
+  TATTOO_FINALS_SECTION,
+  TATTOO_LEGACY_SECTION,
+  TATTOO_TEMPLATES_SECTION,
   TATTOO_DESIGNS_QUESTION_ID,
 } from './tattoo-designs.policy';
 
@@ -106,7 +109,7 @@ describe('ContractsPreparationProfileService (tattoo catalog designs)', () => {
     return repo.save(
       repo.create({
         page: TATTOO_CATALOG_PAGE,
-        section: TATTOO_CATALOG_SECTION,
+        section: TATTOO_FINALS_SECTION,
         title: 'Mariposa',
         imageUrl: 'https://cdn.example/mariposa.png',
         status: 'active',
@@ -222,6 +225,32 @@ describe('ContractsPreparationProfileService (tattoo catalog designs)', () => {
         }),
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
     }
+  });
+
+  it('should accept templates, finals and legacy rows, and reject the photo examples', async () => {
+    await createContract({ token: 'cat-sections' });
+    const tpl = await createCatalogRow({ section: TATTOO_TEMPLATES_SECTION });
+    const fin = await createCatalogRow({ section: TATTOO_FINALS_SECTION });
+    const legacy = await createCatalogRow({ section: TATTOO_LEGACY_SECTION });
+    const example = await createCatalogRow({ section: PHOTO_EXAMPLES_SECTION });
+
+    await expect(
+      service.setTattooDesigns({
+        token: 'cat-sections',
+        phone: PHONE,
+        assets: [],
+        catalogDesignIds: [tpl.id, fin.id, legacy.id],
+      }),
+    ).resolves.toBeDefined();
+
+    await expect(
+      service.setTattooDesigns({
+        token: 'cat-sections',
+        phone: PHONE,
+        assets: [],
+        catalogDesignIds: [example.id],
+      }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
 
   it('should keep the frozen copy of an already chosen design after the catalog row changes', async () => {

@@ -24,7 +24,7 @@ import { PrepProfileUploadsService } from './prep-profile-uploads.service';
 import {
   TATTOO_CATALOG_PAGE,
   TATTOO_CATALOG_QUESTION_ID,
-  TATTOO_CATALOG_SECTION,
+  TATTOO_CATALOG_SELECTABLE_SECTIONS,
   TATTOO_CATALOG_MAX,
   TATTOO_UPLOADS_MAX,
   TATTOO_DESIGNS_QUESTION_ID,
@@ -567,7 +567,7 @@ export class ContractsPreparationProfileService {
           where: {
             id: In(newIds),
             page: TATTOO_CATALOG_PAGE,
-            section: TATTOO_CATALOG_SECTION,
+            section: In(TATTOO_CATALOG_SELECTABLE_SECTIONS),
             status: 'active',
           },
         })

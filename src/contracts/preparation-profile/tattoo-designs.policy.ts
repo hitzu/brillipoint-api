@@ -16,7 +16,20 @@ export type TattooCatalogDesign = {
 
 // The catalog is a page/section of the `carousels` table (global: no brand).
 export const TATTOO_CATALOG_PAGE = 'reservation';
-export const TATTOO_CATALOG_SECTION = 'tattoo-designs';
+/** Customizable templates: the team personalizes them with the client's photos. */
+export const TATTOO_TEMPLATES_SECTION = 'tattoo-templates';
+/** Final designs proposed by Brillipoint. */
+export const TATTOO_FINALS_SECTION = 'tattoo-finals';
+/** Legacy section of the first catalog rows; treated as final designs. */
+export const TATTOO_LEGACY_SECTION = 'tattoo-designs';
+/** Sections the client can choose from. */
+export const TATTOO_CATALOG_SELECTABLE_SECTIONS = [
+  TATTOO_TEMPLATES_SECTION,
+  TATTOO_FINALS_SECTION,
+  TATTOO_LEGACY_SECTION,
+];
+/** Reference photos that show what a good upload looks like; never selectable. */
+export const PHOTO_EXAMPLES_SECTION = 'photos-examples';
 export const TATTOO_DESIGNS_CLOSE_DAYS = 7;
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
