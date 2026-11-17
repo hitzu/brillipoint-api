@@ -151,10 +151,12 @@ describe('ContractsPreparationProfileService (tattoo catalog designs)', () => {
     ]);
   });
 
-  it('should allow exactly 10 between uploads and chosen designs and reject an 11th', async () => {
+  it('should cap uploads and catalog choices independently at 10 each', async () => {
     const contract = await createContract({ token: 'cat-cap' });
     const rows = await Promise.all(
-      [1, 2, 3].map((n) => createCatalogRow({ title: `Diseño ${n}` })),
+      Array.from({ length: 11 }, (_, n) =>
+        createCatalogRow({ title: `Diseño ${n + 1}` }),
+      ),
     );
     const ids = rows.map((r) => r.id);
 
@@ -162,8 +164,8 @@ describe('ContractsPreparationProfileService (tattoo catalog designs)', () => {
       service.setTattooDesigns({
         token: 'cat-cap',
         phone: PHONE,
-        assets: uploads(contract.id, 7),
-        catalogDesignIds: ids,
+        assets: uploads(contract.id, 10),
+        catalogDesignIds: ids.slice(0, 10),
       }),
     ).resolves.toBeDefined();
 
@@ -171,14 +173,23 @@ describe('ContractsPreparationProfileService (tattoo catalog designs)', () => {
       service.setTattooDesigns({
         token: 'cat-cap',
         phone: PHONE,
-        assets: uploads(contract.id, 8),
+        assets: uploads(contract.id, 11),
+        catalogDesignIds: ids.slice(0, 3),
+      }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+
+    await expect(
+      service.setTattooDesigns({
+        token: 'cat-cap',
+        phone: PHONE,
+        assets: uploads(contract.id, 1),
         catalogDesignIds: ids,
       }),
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
 
     const after = await service.getByToken({ token: 'cat-cap', phone: PHONE });
-    expect(after.answers[TATTOO_DESIGNS_QUESTION_ID]).toHaveLength(7);
-    expect(after.answers[TATTOO_CATALOG_QUESTION_ID]).toHaveLength(3);
+    expect(after.answers[TATTOO_DESIGNS_QUESTION_ID]).toHaveLength(10);
+    expect(after.answers[TATTOO_CATALOG_QUESTION_ID]).toHaveLength(10);
   });
 
   it('should reject the same design chosen twice', async () => {

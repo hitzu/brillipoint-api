@@ -9,7 +9,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-import { TATTOO_DESIGNS_MAX } from '../tattoo-designs.policy';
+import { TATTOO_CATALOG_MAX, TATTOO_UPLOADS_MAX } from '../tattoo-designs.policy';
 
 export class PrepProfileTattooDesignAssetDto {
   @IsString()
@@ -23,7 +23,7 @@ export class PrepProfileTattooDesignAssetDto {
 
 export class SetPrepProfileTattooDesignsDto {
   @IsArray()
-  @ArrayMaxSize(TATTOO_DESIGNS_MAX)
+  @ArrayMaxSize(TATTOO_UPLOADS_MAX)
   @ValidateNested({ each: true })
   @Type(() => PrepProfileTattooDesignAssetDto)
   assets!: PrepProfileTattooDesignAssetDto[];
@@ -31,7 +31,7 @@ export class SetPrepProfileTattooDesignsDto {
   /** Catalog designs (carousel row ids) to choose; omitted keeps the current choice. */
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(TATTOO_DESIGNS_MAX)
+  @ArrayMaxSize(TATTOO_CATALOG_MAX)
   @IsInt({ each: true })
   catalogDesignIds?: number[];
 }

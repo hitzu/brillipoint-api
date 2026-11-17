@@ -2,8 +2,10 @@ import { BOOKING_PURPOSE } from '../../bookings/constants/booking_purpose.enum';
 import { EXTRA_PRODUCT_ACTION } from '../../extras/types/extra-product-action.types';
 
 export const TATTOO_DESIGNS_QUESTION_ID = 'tattoo_designs';
-export const TATTOO_DESIGNS_MAX = 10;
-// Chosen + uploaded designs share the same maximum (TATTOO_DESIGNS_MAX).
+/** Uploaded photos and final designs (mixed). */
+export const TATTOO_UPLOADS_MAX = 10;
+/** Catalog templates and final designs the client chooses. Independent of the uploads cap. */
+export const TATTOO_CATALOG_MAX = 10;
 export const TATTOO_CATALOG_QUESTION_ID = 'tattoo_catalog_designs';
 /** Frozen copy of the catalog row taken when the client chooses it. */
 export type TattooCatalogDesign = {
