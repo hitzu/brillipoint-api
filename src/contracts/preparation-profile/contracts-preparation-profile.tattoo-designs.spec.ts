@@ -131,7 +131,7 @@ describe('ContractsPreparationProfileService (Glitter bar tattoo designs)', () =
     }));
 
   describe('setTattooDesigns', () => {
-    it('should save up to 5 designs while the event is more than 7 days away', async () => {
+    it('should save up to 10 designs while the event is more than 7 days away', async () => {
       const contract = await createContract({
         token: 'tattoo-ok',
         productName: TRIGGER_NAME,
@@ -141,11 +141,11 @@ describe('ContractsPreparationProfileService (Glitter bar tattoo designs)', () =
       const res = await service.setTattooDesigns({
         token: 'tattoo-ok',
         phone: PHONE,
-        assets: assets(contract.id, 5),
+        assets: assets(contract.id, 10),
       });
 
       expect(res.contractId).toBe(contract.id);
-      expect(res.answers[TATTOO_DESIGNS_QUESTION_ID]).toHaveLength(5);
+      expect(res.answers[TATTOO_DESIGNS_QUESTION_ID]).toHaveLength(10);
       expect(res.locked[TATTOO_DESIGNS_QUESTION_ID]).not.toBe(true);
     });
 
@@ -194,7 +194,7 @@ describe('ContractsPreparationProfileService (Glitter bar tattoo designs)', () =
         service.setTattooDesigns({
           token: 'tattoo-six',
           phone: PHONE,
-          assets: assets(contract.id, 6),
+          assets: assets(contract.id, 11),
         }),
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
 

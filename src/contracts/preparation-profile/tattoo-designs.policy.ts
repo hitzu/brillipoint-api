@@ -2,8 +2,10 @@ import { BOOKING_PURPOSE } from '../../bookings/constants/booking_purpose.enum';
 import { EXTRA_PRODUCT_ACTION } from '../../extras/types/extra-product-action.types';
 
 export const TATTOO_DESIGNS_QUESTION_ID = 'tattoo_designs';
-export const TATTOO_DESIGNS_MAX = 5;
-// Chosen + uploaded designs share the same maximum (TATTOO_DESIGNS_MAX).
+/** Uploaded photos and final designs (mixed). */
+export const TATTOO_UPLOADS_MAX = 10;
+/** Catalog templates and final designs the client chooses. Independent of the uploads cap. */
+export const TATTOO_CATALOG_MAX = 10;
 export const TATTOO_CATALOG_QUESTION_ID = 'tattoo_catalog_designs';
 /** Frozen copy of the catalog row taken when the client chooses it. */
 export type TattooCatalogDesign = {
@@ -14,7 +16,20 @@ export type TattooCatalogDesign = {
 
 // The catalog is a page/section of the `carousels` table (global: no brand).
 export const TATTOO_CATALOG_PAGE = 'reservation';
-export const TATTOO_CATALOG_SECTION = 'tattoo-designs';
+/** Customizable templates: the team personalizes them with the client's photos. */
+export const TATTOO_TEMPLATES_SECTION = 'tattoo-templates';
+/** Final designs proposed by Brillipoint. */
+export const TATTOO_FINALS_SECTION = 'tattoo-finals';
+/** Legacy section of the first catalog rows; treated as final designs. */
+export const TATTOO_LEGACY_SECTION = 'tattoo-designs';
+/** Sections the client can choose from. */
+export const TATTOO_CATALOG_SELECTABLE_SECTIONS = [
+  TATTOO_TEMPLATES_SECTION,
+  TATTOO_FINALS_SECTION,
+  TATTOO_LEGACY_SECTION,
+];
+/** Reference photos that show what a good upload looks like; never selectable. */
+export const PHOTO_EXAMPLES_SECTION = 'photos-examples';
 export const TATTOO_DESIGNS_CLOSE_DAYS = 7;
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;

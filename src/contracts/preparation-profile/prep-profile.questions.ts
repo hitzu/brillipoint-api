@@ -292,7 +292,7 @@ const BRIDE_QUESTIONS: PrepProfileQuestionDefinition[] = [
   },
 ];
 
-// Glitter bar: the client uploads up to 5 tattoo designs. Managed by the
+// Glitter bar: the client uploads up to 10 tattoo designs. Managed by the
 // dedicated tattoo-designs flow (see tattoo-designs.policy.ts), never by the
 // generic answer endpoints, and never part of the Make up completion check.
 const TATTOO_QUESTIONS: PrepProfileQuestionDefinition[] = [
@@ -300,8 +300,8 @@ const TATTOO_QUESTIONS: PrepProfileQuestionDefinition[] = [
     id: 'tattoo_designs',
     type: 'asset_array',
     group: 'tatuajes',
-    label: 'Diseños de tatuajes (hasta 5)',
-    placeholder: 'Sube hasta 5 imágenes con los diseños que quieres.',
+    label: 'Diseños de tatuajes (hasta 10)',
+    placeholder: 'Sube hasta 10 imágenes con los diseños que quieres.',
   },
 ];
 

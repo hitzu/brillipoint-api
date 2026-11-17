@@ -19,7 +19,10 @@ import { PrepProfileUploadsService } from './prep-profile-uploads.service';
 import {
   TATTOO_CATALOG_PAGE,
   TATTOO_CATALOG_QUESTION_ID,
-  TATTOO_CATALOG_SECTION,
+  PHOTO_EXAMPLES_SECTION,
+  TATTOO_FINALS_SECTION,
+  TATTOO_LEGACY_SECTION,
+  TATTOO_TEMPLATES_SECTION,
   TATTOO_DESIGNS_QUESTION_ID,
 } from './tattoo-designs.policy';
 
@@ -106,7 +109,7 @@ describe('ContractsPreparationProfileService (tattoo catalog designs)', () => {
     return repo.save(
       repo.create({
         page: TATTOO_CATALOG_PAGE,
-        section: TATTOO_CATALOG_SECTION,
+        section: TATTOO_FINALS_SECTION,
         title: 'Mariposa',
         imageUrl: 'https://cdn.example/mariposa.png',
         status: 'active',
@@ -151,10 +154,12 @@ describe('ContractsPreparationProfileService (tattoo catalog designs)', () => {
     ]);
   });
 
-  it('should allow exactly 5 between uploads and chosen designs and reject a 6th', async () => {
+  it('should cap uploads and catalog choices independently at 10 each', async () => {
     const contract = await createContract({ token: 'cat-cap' });
     const rows = await Promise.all(
-      [1, 2, 3].map((n) => createCatalogRow({ title: `Diseño ${n}` })),
+      Array.from({ length: 11 }, (_, n) =>
+        createCatalogRow({ title: `Diseño ${n + 1}` }),
+      ),
     );
     const ids = rows.map((r) => r.id);
 
@@ -162,8 +167,8 @@ describe('ContractsPreparationProfileService (tattoo catalog designs)', () => {
       service.setTattooDesigns({
         token: 'cat-cap',
         phone: PHONE,
-        assets: uploads(contract.id, 2),
-        catalogDesignIds: ids,
+        assets: uploads(contract.id, 10),
+        catalogDesignIds: ids.slice(0, 10),
       }),
     ).resolves.toBeDefined();
 
@@ -171,14 +176,23 @@ describe('ContractsPreparationProfileService (tattoo catalog designs)', () => {
       service.setTattooDesigns({
         token: 'cat-cap',
         phone: PHONE,
-        assets: uploads(contract.id, 3),
+        assets: uploads(contract.id, 11),
+        catalogDesignIds: ids.slice(0, 3),
+      }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+
+    await expect(
+      service.setTattooDesigns({
+        token: 'cat-cap',
+        phone: PHONE,
+        assets: uploads(contract.id, 1),
         catalogDesignIds: ids,
       }),
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
 
     const after = await service.getByToken({ token: 'cat-cap', phone: PHONE });
-    expect(after.answers[TATTOO_DESIGNS_QUESTION_ID]).toHaveLength(2);
-    expect(after.answers[TATTOO_CATALOG_QUESTION_ID]).toHaveLength(3);
+    expect(after.answers[TATTOO_DESIGNS_QUESTION_ID]).toHaveLength(10);
+    expect(after.answers[TATTOO_CATALOG_QUESTION_ID]).toHaveLength(10);
   });
 
   it('should reject the same design chosen twice', async () => {
@@ -213,6 +227,32 @@ describe('ContractsPreparationProfileService (tattoo catalog designs)', () => {
     }
   });
 
+  it('should accept templates, finals and legacy rows, and reject the photo examples', async () => {
+    await createContract({ token: 'cat-sections' });
+    const tpl = await createCatalogRow({ section: TATTOO_TEMPLATES_SECTION });
+    const fin = await createCatalogRow({ section: TATTOO_FINALS_SECTION });
+    const legacy = await createCatalogRow({ section: TATTOO_LEGACY_SECTION });
+    const example = await createCatalogRow({ section: PHOTO_EXAMPLES_SECTION });
+
+    await expect(
+      service.setTattooDesigns({
+        token: 'cat-sections',
+        phone: PHONE,
+        assets: [],
+        catalogDesignIds: [tpl.id, fin.id, legacy.id],
+      }),
+    ).resolves.toBeDefined();
+
+    await expect(
+      service.setTattooDesigns({
+        token: 'cat-sections',
+        phone: PHONE,
+        assets: [],
+        catalogDesignIds: [example.id],
+      }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+  });
+
   it('should keep the frozen copy of an already chosen design after the catalog row changes', async () => {
     const contract = await createContract({ token: 'cat-frozen' });
     const row = await createCatalogRow({ title: 'Mariposa' });
@@ -239,7 +279,7 @@ describe('ContractsPreparationProfileService (tattoo catalog designs)', () => {
     ]);
   });
 
-  it('should keep the current choice when catalogDesignIds is omitted, and count it in the total', async () => {
+  it('should keep the current choice when catalogDesignIds is omitted, and not count it against the uploads', async () => {
     const contract = await createContract({ token: 'cat-omit' });
     const rows = await Promise.all(
       [1, 2, 3, 4].map((n) => createCatalogRow({ title: `Diseño ${n}` })),
@@ -258,13 +298,13 @@ describe('ContractsPreparationProfileService (tattoo catalog designs)', () => {
     });
     expect(kept.answers[TATTOO_CATALOG_QUESTION_ID]).toHaveLength(4);
 
-    await expect(
-      service.setTattooDesigns({
-        token: 'cat-omit',
-        phone: PHONE,
-        assets: uploads(contract.id, 2),
-      }),
-    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    const full = await service.setTattooDesigns({
+      token: 'cat-omit',
+      phone: PHONE,
+      assets: uploads(contract.id, 10),
+    });
+    expect(full.answers[TATTOO_DESIGNS_QUESTION_ID]).toHaveLength(10);
+    expect(full.answers[TATTOO_CATALOG_QUESTION_ID]).toHaveLength(4);
   });
 
   it('should clear the chosen designs with an empty list', async () => {

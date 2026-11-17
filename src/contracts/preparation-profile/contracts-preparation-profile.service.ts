@@ -24,8 +24,9 @@ import { PrepProfileUploadsService } from './prep-profile-uploads.service';
 import {
   TATTOO_CATALOG_PAGE,
   TATTOO_CATALOG_QUESTION_ID,
-  TATTOO_CATALOG_SECTION,
-  TATTOO_DESIGNS_MAX,
+  TATTOO_CATALOG_SELECTABLE_SECTIONS,
+  TATTOO_CATALOG_MAX,
+  TATTOO_UPLOADS_MAX,
   TATTOO_DESIGNS_QUESTION_ID,
   hasTattooDesignsTrigger,
   isTattooDesignsClosed,
@@ -566,7 +567,7 @@ export class ContractsPreparationProfileService {
           where: {
             id: In(newIds),
             page: TATTOO_CATALOG_PAGE,
-            section: TATTOO_CATALOG_SECTION,
+            section: In(TATTOO_CATALOG_SELECTABLE_SECTIONS),
             status: 'active',
           },
         })
@@ -645,9 +646,14 @@ export class ContractsPreparationProfileService {
       input.catalogDesignIds === undefined
         ? currentCatalog
         : await this.resolveCatalogDesigns(input.catalogDesignIds, currentCatalog);
-    if (input.assets.length + catalogDesigns.length > TATTOO_DESIGNS_MAX) {
+    if (input.assets.length > TATTOO_UPLOADS_MAX) {
       throw new UnprocessableEntityException(
-        `At most ${TATTOO_DESIGNS_MAX} tattoo designs (uploaded plus chosen) are allowed`,
+        `At most ${TATTOO_UPLOADS_MAX} uploaded tattoo designs are allowed`,
+      );
+    }
+    if (catalogDesigns.length > TATTOO_CATALOG_MAX) {
+      throw new UnprocessableEntityException(
+        `At most ${TATTOO_CATALOG_MAX} catalog tattoo designs can be chosen`,
       );
     }
 
