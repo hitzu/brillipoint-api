@@ -151,7 +151,7 @@ describe('ContractsPreparationProfileService (tattoo catalog designs)', () => {
     ]);
   });
 
-  it('should allow exactly 5 between uploads and chosen designs and reject a 6th', async () => {
+  it('should allow exactly 10 between uploads and chosen designs and reject an 11th', async () => {
     const contract = await createContract({ token: 'cat-cap' });
     const rows = await Promise.all(
       [1, 2, 3].map((n) => createCatalogRow({ title: `Diseño ${n}` })),
@@ -162,7 +162,7 @@ describe('ContractsPreparationProfileService (tattoo catalog designs)', () => {
       service.setTattooDesigns({
         token: 'cat-cap',
         phone: PHONE,
-        assets: uploads(contract.id, 2),
+        assets: uploads(contract.id, 7),
         catalogDesignIds: ids,
       }),
     ).resolves.toBeDefined();
@@ -171,13 +171,13 @@ describe('ContractsPreparationProfileService (tattoo catalog designs)', () => {
       service.setTattooDesigns({
         token: 'cat-cap',
         phone: PHONE,
-        assets: uploads(contract.id, 3),
+        assets: uploads(contract.id, 8),
         catalogDesignIds: ids,
       }),
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
 
     const after = await service.getByToken({ token: 'cat-cap', phone: PHONE });
-    expect(after.answers[TATTOO_DESIGNS_QUESTION_ID]).toHaveLength(2);
+    expect(after.answers[TATTOO_DESIGNS_QUESTION_ID]).toHaveLength(7);
     expect(after.answers[TATTOO_CATALOG_QUESTION_ID]).toHaveLength(3);
   });
 
@@ -262,7 +262,7 @@ describe('ContractsPreparationProfileService (tattoo catalog designs)', () => {
       service.setTattooDesigns({
         token: 'cat-omit',
         phone: PHONE,
-        assets: uploads(contract.id, 2),
+        assets: uploads(contract.id, 7),
       }),
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
