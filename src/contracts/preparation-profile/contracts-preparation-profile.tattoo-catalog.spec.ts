@@ -250,7 +250,7 @@ describe('ContractsPreparationProfileService (tattoo catalog designs)', () => {
     ]);
   });
 
-  it('should keep the current choice when catalogDesignIds is omitted, and count it in the total', async () => {
+  it('should keep the current choice when catalogDesignIds is omitted, and not count it against the uploads', async () => {
     const contract = await createContract({ token: 'cat-omit' });
     const rows = await Promise.all(
       [1, 2, 3, 4].map((n) => createCatalogRow({ title: `Diseño ${n}` })),
@@ -269,13 +269,13 @@ describe('ContractsPreparationProfileService (tattoo catalog designs)', () => {
     });
     expect(kept.answers[TATTOO_CATALOG_QUESTION_ID]).toHaveLength(4);
 
-    await expect(
-      service.setTattooDesigns({
-        token: 'cat-omit',
-        phone: PHONE,
-        assets: uploads(contract.id, 7),
-      }),
-    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    const full = await service.setTattooDesigns({
+      token: 'cat-omit',
+      phone: PHONE,
+      assets: uploads(contract.id, 10),
+    });
+    expect(full.answers[TATTOO_DESIGNS_QUESTION_ID]).toHaveLength(10);
+    expect(full.answers[TATTOO_CATALOG_QUESTION_ID]).toHaveLength(4);
   });
 
   it('should clear the chosen designs with an empty list', async () => {
