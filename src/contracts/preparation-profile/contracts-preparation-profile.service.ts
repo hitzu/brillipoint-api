@@ -2,11 +2,13 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { plainToInstance } from 'class-transformer';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
+import { Carousel } from '../../carousels/entities/carousel.entity';
 import { Contract } from '../entities/contract.entity';
 import { ContractPreparationProfile } from '../entities/contract-preparation-profile.entity';
 import type { PrepProfileAssetsMode } from './dto/prep-profile-public.query.dto';
@@ -19,6 +21,17 @@ import {
 } from './prep-profile.questions';
 import { assertPrepProfileQuestionId, validatePrepProfileAnswer } from './prep-profile.validation';
 import { PrepProfileUploadsService } from './prep-profile-uploads.service';
+import {
+  TATTOO_CATALOG_PAGE,
+  TATTOO_CATALOG_QUESTION_ID,
+  TATTOO_CATALOG_SECTION,
+  TATTOO_DESIGNS_MAX,
+  TATTOO_DESIGNS_QUESTION_ID,
+  hasTattooDesignsTrigger,
+  isTattooDesignsClosed,
+  resolveEventDate,
+  type TattooCatalogDesign,
+} from './tattoo-designs.policy';
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value != null && !Array.isArray(value);
@@ -187,6 +200,19 @@ function phonesMatch(a: string | null, b: string): boolean {
   return left.length > 0 && left === right;
 }
 
+function readCatalogDesigns(value: unknown): TattooCatalogDesign[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter(
+    (v): v is TattooCatalogDesign =>
+      isPlainObject(v) &&
+      typeof v.carouselId === 'number' &&
+      typeof v.title === 'string' &&
+      typeof v.imageUrl === 'string',
+  );
+}
+
 @Injectable()
 export class ContractsPreparationProfileService {
   constructor(
@@ -262,12 +288,18 @@ export class ContractsPreparationProfileService {
             }),
         });
 
+    const locked: Record<string, boolean> = { ...(profile?.locked ?? {}) };
+    const tattoo = await this.getTattooContext(contractId);
+    if (tattoo.isEnabled && tattoo.closed) {
+      locked[TATTOO_DESIGNS_QUESTION_ID] = true;
+    }
+
     return plainToInstance(
       PrepProfileDto,
       {
         contractId,
         answers: mappedAnswers,
-        locked: profile?.locked ?? {},
+        locked,
       },
       { excludeExtraneousValues: true },
     );
@@ -287,6 +319,28 @@ export class ContractsPreparationProfileService {
       where: { contractId },
     });
     return await this.toDto(contractId, profile, {
+      assets: input.assets,
+      expiresIn: input.expiresIn,
+    });
+  }
+
+  /** Staff read: by contract id, no client phone (the controller is authenticated). */
+  async getByContractId(input: {
+    contractId: number;
+    assets?: PrepProfileAssetsMode;
+    expiresIn?: number;
+  }): Promise<PrepProfileDto> {
+    const contract = await this.contractsRepository.findOne({
+      where: { id: input.contractId },
+      select: { id: true },
+    });
+    if (!contract) {
+      throw new NotFoundException('Contract not found');
+    }
+    const profile = await this.profilesRepository.findOne({
+      where: { contractId: contract.id },
+    });
+    return await this.toDto(contract.id, profile, {
       assets: input.assets,
       expiresIn: input.expiresIn,
     });
@@ -342,6 +396,11 @@ export class ContractsPreparationProfileService {
     // Validate and de-dup by questionId (last value wins).
     const valueByQuestionId = new Map<string, unknown>();
     for (const item of answers) {
+      if (item.questionId === TATTOO_DESIGNS_QUESTION_ID) {
+        throw new UnprocessableEntityException(
+          `Question ${TATTOO_DESIGNS_QUESTION_ID} is managed by the tattoo designs endpoint`,
+        );
+      }
       validatePrepProfileAnswer({
         questionId: item.questionId,
         value: item.value,
@@ -451,6 +510,9 @@ export class ContractsPreparationProfileService {
     if (this.isComplete(profile.answers)) {
       const lockedAll: Record<string, boolean> = { ...(profile.locked ?? {}) };
       for (const q of PREP_PROFILE_QUESTIONS) {
+        if (q.id === TATTOO_DESIGNS_QUESTION_ID) {
+          continue;
+        }
         lockedAll[q.id] = true;
       }
       profile.locked = lockedAll;
@@ -458,6 +520,152 @@ export class ContractsPreparationProfileService {
 
     const saved = await this.profilesRepository.save(profile);
     return await this.toDto(contractId, saved, options);
+  }
+
+  private async getTattooContext(
+    contractId: number,
+  ): Promise<{ isEnabled: boolean; closed: boolean }> {
+    const contract = await this.contractsRepository.findOne({
+      where: { id: contractId },
+      relations: {
+        bookings: true,
+        items: { package: { packageProducts: { product: true } } },
+        extras: { extra: { extraProducts: { product: true } } },
+      },
+    });
+    const eventDate = resolveEventDate(contract?.bookings);
+    return {
+      isEnabled: hasTattooDesignsTrigger(contract?.items, contract?.extras),
+      closed:
+        eventDate != null && isTattooDesignsClosed(eventDate, new Date()),
+    };
+  }
+
+  /**
+   * Replaces the whole list of tattoo designs (add, replace and delete are all
+   * "set the new list"). Open only for contracts with a tattoo designs product or extra, until 7 days
+   * before the event.
+   */
+  /**
+   * Resolves chosen ids against active catalog rows. A design that was already
+   * chosen keeps its frozen copy even if its row changed or was deactivated.
+   */
+  private async resolveCatalogDesigns(
+    ids: number[],
+    current: TattooCatalogDesign[],
+  ): Promise<TattooCatalogDesign[]> {
+    if (new Set(ids).size !== ids.length) {
+      throw new UnprocessableEntityException(
+        'A catalog design can only be chosen once',
+      );
+    }
+    const kept = new Map(current.map((d) => [d.carouselId, d]));
+    const newIds = ids.filter((id) => !kept.has(id));
+    const rows = newIds.length
+      ? await this.contractsRepository.manager.getRepository(Carousel).find({
+          where: {
+            id: In(newIds),
+            page: TATTOO_CATALOG_PAGE,
+            section: TATTOO_CATALOG_SECTION,
+            status: 'active',
+          },
+        })
+      : [];
+    if (rows.length !== newIds.length) {
+      throw new UnprocessableEntityException('Invalid catalog design');
+    }
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    return ids.map((id) => {
+      const existing = kept.get(id);
+      if (existing) {
+        return existing;
+      }
+      const row = byId.get(id) as Carousel;
+      return {
+        carouselId: row.id,
+        title: row.title ?? '',
+        imageUrl: row.imageUrl,
+      };
+    });
+  }
+
+  async setTattooDesigns(input: {
+    token: string;
+    phone: string;
+    assets: Array<{ path: string; mime: string }>;
+    /** Catalog designs to choose; omitted keeps the current choice. */
+    catalogDesignIds?: number[];
+    assetsMode?: PrepProfileAssetsMode;
+    expiresIn?: number;
+  }): Promise<PrepProfileDto> {
+    const contractId = await this.getContractIdByTokenAndPhone(
+      input.token,
+      input.phone,
+    );
+
+    const tattoo = await this.getTattooContext(contractId);
+    if (!tattoo.isEnabled) {
+      throw new UnprocessableEntityException(
+        'Contract does not include tattoo designs',
+      );
+    }
+    if (tattoo.closed) {
+      throw new ConflictException(
+        `Question is locked: ${TATTOO_DESIGNS_QUESTION_ID}`,
+      );
+    }
+    const folder = `${contractId}/${TATTOO_DESIGNS_QUESTION_ID}/`;
+    for (const asset of input.assets) {
+      if (!isAssetLike(asset) || !asset.path.startsWith(folder)) {
+        throw new UnprocessableEntityException(
+          'Invalid tattoo design asset path',
+        );
+      }
+      if (!asset.mime.startsWith('image/')) {
+        throw new UnprocessableEntityException(
+          'Tattoo designs must be images',
+        );
+      }
+    }
+
+    let profile = await this.profilesRepository.findOne({
+      where: { contractId },
+    });
+    if (!profile) {
+      profile = this.profilesRepository.create({
+        contractId,
+        answers: {},
+        locked: {},
+      });
+    }
+    const currentCatalog = readCatalogDesigns(
+      profile.answers?.[TATTOO_CATALOG_QUESTION_ID],
+    );
+    const catalogDesigns =
+      input.catalogDesignIds === undefined
+        ? currentCatalog
+        : await this.resolveCatalogDesigns(input.catalogDesignIds, currentCatalog);
+    if (input.assets.length + catalogDesigns.length > TATTOO_DESIGNS_MAX) {
+      throw new UnprocessableEntityException(
+        `At most ${TATTOO_DESIGNS_MAX} tattoo designs (uploaded plus chosen) are allowed`,
+      );
+    }
+
+    profile.answers = {
+      ...(profile.answers ?? {}),
+      [TATTOO_DESIGNS_QUESTION_ID]: input.assets.map((a) => ({
+        path: a.path,
+        mime: a.mime,
+      })),
+      ...(input.catalogDesignIds === undefined
+        ? {}
+        : { [TATTOO_CATALOG_QUESTION_ID]: catalogDesigns }),
+    };
+    const saved = await this.profilesRepository.save(profile);
+    return await this.toDto(contractId, saved, {
+      assets: input.assetsMode,
+      expiresIn: input.expiresIn,
+    });
   }
 
   async unlockQuestion(input: {

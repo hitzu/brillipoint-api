@@ -2,6 +2,7 @@ import type { ConfigService } from '@nestjs/config';
 import type { Repository } from 'typeorm';
 
 import {
+  ConflictException,
   InternalServerErrorException,
   NotFoundException,
   UnprocessableEntityException,
@@ -387,6 +388,75 @@ describe('PrepProfileUploadsService', () => {
       ).rejects.toBeInstanceOf(InternalServerErrorException);
 
       expect(storageFrom).toHaveBeenCalledWith(bucket);
+    });
+  });
+
+  describe('createSignedUploadUrl (tattoo_designs guard)', () => {
+    const token = 'token-123';
+    const phone = '+1 (555) 111-2222';
+    const input = {
+      token,
+      phone,
+      questionId: 'tattoo_designs',
+      fileName: 'design.png',
+      mime: 'image/png',
+    };
+
+    function daysFromToday(days: number): string {
+      const d = new Date(Date.now() - 6 * 60 * 60 * 1000);
+      d.setUTCDate(d.getUTCDate() + days);
+      return d.toISOString().slice(0, 10);
+    }
+
+    function mockContract(options: { productName: string; eventDate: string }) {
+      (assertPrepProfileQuestionId as unknown as jest.Mock).mockReturnValue({
+        id: 'tattoo_designs',
+        type: 'asset_array',
+      });
+      (contractsRepository.findOne as jest.Mock).mockResolvedValue({
+        id: 7,
+        clientPhone: phone,
+        bookings: [{ purpose: 'event', eventDate: options.eventDate }],
+        items: [{ itemsSnapshot: [{ name: options.productName }] }],
+      });
+      storageCreateSignedUploadUrl.mockResolvedValue({
+        data: { signedUrl: 'https://signed-upload-url', token: 'upload-token' },
+        error: null,
+      });
+    }
+
+    it('should issue an upload URL under the tattoo folder while the window is open', async () => {
+      mockContract({ productName: 'Tatuajes personalizados', eventDate: daysFromToday(30) });
+
+      const res = await service.createSignedUploadUrl(input);
+
+      expect(res.path).toBe('7/tattoo_designs/uuid-123_design.png');
+    });
+
+    it('should refuse an upload URL 7 days or less before the event', async () => {
+      mockContract({ productName: 'Tatuajes personalizados', eventDate: daysFromToday(7) });
+
+      await expect(service.createSignedUploadUrl(input)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(storageCreateSignedUploadUrl).not.toHaveBeenCalled();
+    });
+
+    it('should refuse an upload URL for a contract without a tattoo designs product', async () => {
+      mockContract({ productName: 'Maquillista', eventDate: daysFromToday(30) });
+
+      await expect(service.createSignedUploadUrl(input)).rejects.toBeInstanceOf(
+        UnprocessableEntityException,
+      );
+      expect(storageCreateSignedUploadUrl).not.toHaveBeenCalled();
+    });
+
+    it('should refuse non-image mime types', async () => {
+      mockContract({ productName: 'Tatuajes personalizados', eventDate: daysFromToday(30) });
+
+      await expect(
+        service.createSignedUploadUrl({ ...input, mime: 'application/pdf' }),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
     });
   });
 });
