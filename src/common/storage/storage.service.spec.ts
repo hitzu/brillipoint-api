@@ -94,9 +94,9 @@ describe('StorageService', () => {
   // ─── privateBucket ─────────────────────────────────────────────────────
 
   describe('privateBucket', () => {
-    it('returns SUPABASE_STORAGE_PRIVATE_BUCKET when set', () => {
+    it('returns STORAGE_PRIVATE_BUCKET when set', () => {
       (configService.get as jest.Mock).mockImplementation((key: string) =>
-        key === 'SUPABASE_STORAGE_PRIVATE_BUCKET' ? 'local-priv' : undefined,
+        key === 'STORAGE_PRIVATE_BUCKET' ? 'local-priv' : undefined,
       );
 
       expect(service.privateBucket).toBe('local-priv');
@@ -104,7 +104,7 @@ describe('StorageService', () => {
 
     it('throws instead of falling back to the public bucket when unset', () => {
       expect(() => service.privateBucket).toThrow(
-        'Supabase private storage bucket is not configured',
+        'Private storage bucket is not configured',
       );
     });
   });

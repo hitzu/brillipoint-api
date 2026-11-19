@@ -49,11 +49,11 @@ export class StorageService {
    */
   get privateBucket(): string {
     const bucket = this.configService.get<string>(
-      'SUPABASE_STORAGE_PRIVATE_BUCKET',
+      'STORAGE_PRIVATE_BUCKET',
     );
     if (!bucket) {
       throw new InternalServerErrorException(
-        'Supabase private storage bucket is not configured',
+        'Private storage bucket is not configured',
       );
     }
     return bucket;
