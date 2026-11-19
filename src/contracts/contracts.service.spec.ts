@@ -20,6 +20,7 @@ import { EXTRA_PRODUCT_ACTION } from '../extras/types/extra-product-action.types
 import { PackageProduct } from '../packages/entities/package-product.entity';
 import { PromotionFactory } from '../../test/factories/promotions/promotion.factory';
 import { PromotionPackageFactory } from '../../test/factories/promotions/promotion-package.factory';
+import { StorageService } from '../common/storage/storage.service';
 import { PaymentsService } from '../payments/payments.service';
 import { PromotionsService } from '../promotions/promotions.service';
 import { ContractsService } from './contracts.service';
@@ -80,6 +81,19 @@ describe('ContractsService', () => {
       providers: [
         ContractsService,
         PaymentsService,
+        {
+          provide: StorageService,
+          useValue: {
+            privateBucket: 'local-priv',
+            sanitizeFileName: (n: string) => n,
+            createSignedUploadUrl: jest.fn(),
+            createSignedReadUrl: jest
+              .fn()
+              .mockImplementation(({ path }: { path: string }) =>
+                Promise.resolve(`https://s/sign/${path}`),
+              ),
+          },
+        },
         PromotionsService,
         { provide: DataSource, useValue: TestDataSource },
         {
@@ -1632,11 +1646,92 @@ describe('ContractsService', () => {
 
       const detail = await service.getDetail(contract.id);
 
-      expect(detail.bookings.map((b) => b.id)).toEqual([
-        earlier.id,
-        later.id,
-      ]);
-      expect(detail.bookings.find((b) => b.id === deletedBooking.id)).toBeUndefined();
+      expect(detail.bookings.map((b) => b.id)).toEqual([earlier.id, later.id]);
+      expect(
+        detail.bookings.find((b) => b.id === deletedBooking.id),
+      ).toBeUndefined();
+    });
+  });
+
+  describe('payment receipts, edit and delete', () => {
+    const arrange = async (status = CONTRACT_STATUS.CONFIRMED) => {
+      const user = await userFactory.create();
+      const contract = await contractsRepo.save(
+        contractsRepo.create({
+          userId: user.id,
+          sku: `SKU-RCPT-${Math.random()}`,
+          token: `tok-${Math.random()}`,
+          status,
+          total: 500,
+        }),
+      );
+      const payment = await paymentsRepo.save(
+        paymentsRepo.create({
+          contractId: contract.id,
+          amount: 200,
+          receivedAt: new Date('2030-01-01T10:00:00.000Z'),
+          method: PAYMENT_METHOD.TRANSFER,
+          receiptPath: `payments/${contract.id}/x_a.pdf`,
+        }),
+      );
+      return { contract, payment };
+    };
+
+    it('exposes receiptUrl, not the path, in the staff and public details', async () => {
+      const { contract, payment } = await arrange();
+
+      const staff = await service.getDetail(contract.id);
+      const publicDetail = await service.getDetailByToken(contract.token);
+
+      for (const detail of [staff, publicDetail]) {
+        expect(detail.payments[0].receiptUrl).toBe(
+          `https://s/sign/payments/${contract.id}/x_a.pdf`,
+        );
+        expect(detail.payments[0]).not.toHaveProperty('receiptPath');
+      }
+      expect(payment.id).toBe(staff.payments[0].id);
+    });
+
+    it('moves the balance when a payment is edited or deleted, but not when the receipt changes', async () => {
+      const { contract, payment } = await arrange();
+      expect((await service.getDetail(contract.id)).balanceDue).toBe(300);
+
+      await service.updatePayment(contract.id, payment.id, {
+        receiptPath: null,
+      });
+      expect((await service.getDetail(contract.id)).balanceDue).toBe(300);
+
+      await service.updatePayment(contract.id, payment.id, { amount: 300 });
+      expect((await service.getDetail(contract.id)).balanceDue).toBe(200);
+
+      await service.deletePayment(contract.id, payment.id);
+      const after = await service.getDetail(contract.id);
+      expect(after.payments).toHaveLength(0);
+      expect(after.balanceDue).toBe(500);
+    });
+
+    it('409s on update, delete and upload URL for a cancelled contract', async () => {
+      const { contract, payment } = await arrange(CONTRACT_STATUS.CANCELLED);
+
+      await expect(
+        service.updatePayment(contract.id, payment.id, { amount: 1 }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      await expect(
+        service.deletePayment(contract.id, payment.id),
+      ).rejects.toBeInstanceOf(ConflictException);
+      await expect(
+        service.createPaymentReceiptUploadUrl(contract.id, {
+          fileName: 'a.pdf',
+          mime: 'application/pdf',
+          size: 1,
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('404s for an unknown contract', async () => {
+      await expect(service.deletePayment(999999, 1)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 

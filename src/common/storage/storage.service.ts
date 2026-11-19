@@ -42,6 +42,23 @@ export class StorageService {
     return bucket || 'public';
   }
 
+  /**
+   * Private bucket for files that must never be reachable through a public
+   * URL (payment receipts). Throws when it is not configured so a missing
+   * variable never silently falls back to the public bucket.
+   */
+  get privateBucket(): string {
+    const bucket = this.configService.get<string>(
+      'SUPABASE_STORAGE_PRIVATE_BUCKET',
+    );
+    if (!bucket) {
+      throw new InternalServerErrorException(
+        'Supabase private storage bucket is not configured',
+      );
+    }
+    return bucket;
+  }
+
   getPublicUrl(path: string): string {
     const baseUrl = this.configService.get<string>('SUPABASE_URL');
     if (!baseUrl) {
@@ -55,9 +72,10 @@ export class StorageService {
   async createSignedReadUrl(input: {
     path: string;
     expiresIn: number;
+    bucket?: string;
   }): Promise<string> {
     const { data, error } = await this.client.storage
-      .from(this.bucket)
+      .from(input.bucket ?? this.bucket)
       .createSignedUrl(input.path, input.expiresIn);
 
     if (error || !data?.signedUrl) {
@@ -71,9 +89,10 @@ export class StorageService {
 
   async createSignedUploadUrl(
     path: string,
+    bucket?: string,
   ): Promise<{ signedUrl: string; token: string }> {
     const { data, error } = await this.client.storage
-      .from(this.bucket)
+      .from(bucket ?? this.bucket)
       .createSignedUploadUrl(path);
 
     if (error || !data?.signedUrl || !data?.token) {

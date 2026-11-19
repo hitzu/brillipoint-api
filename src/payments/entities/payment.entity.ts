@@ -32,6 +32,9 @@ export class Payment extends BaseTimeEntity {
   @Column('text', { nullable: true })
   reference: string | null = null;
 
+  @Column('text', { name: 'receipt_path', nullable: true })
+  receiptPath: string | null = null;
+
   @ManyToOne(() => Contract, (contract) => contract.payments, {
     nullable: false,
   })

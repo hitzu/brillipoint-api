@@ -120,4 +120,53 @@ describe('ContractsController (payments)', () => {
     expect(contractsService.createPayment).not.toHaveBeenCalled();
     await app.close();
   });
+
+  it('routes PATCH, DELETE and receipt-upload-url for payments', async () => {
+    const contractsService = {
+      createPayment: jest.fn(),
+      listPayments: jest.fn(),
+      updatePayment: jest.fn().mockResolvedValue({ id: 5 }),
+      deletePayment: jest.fn().mockResolvedValue(undefined),
+      createPaymentReceiptUploadUrl: jest
+        .fn()
+        .mockResolvedValue({ path: 'p', signedUrl: 's', token: 't' }),
+    };
+
+    const moduleRef = await Test.createTestingModule({
+      controllers: [ContractsController],
+      providers: [
+        { provide: ContractsService, useValue: contractsService },
+        { provide: ContractsPreparationProfileService, useValue: {} },
+        { provide: PrepProfileUploadsService, useValue: {} },
+      ],
+    }).compile();
+
+    const app = moduleRef.createNestApplication();
+    await app.init();
+    const http = request(app.getHttpServer());
+
+    await http
+      .patch('/contracts/10/payments/5')
+      .send({ amount: 70, receiptPath: null })
+      .expect(200);
+    expect(contractsService.updatePayment).toHaveBeenCalledWith(10, 5, {
+      amount: 70,
+      receiptPath: null,
+    });
+
+    await http.delete('/contracts/10/payments/5').expect(204);
+    expect(contractsService.deletePayment).toHaveBeenCalledWith(10, 5);
+
+    await http
+      .post('/contracts/10/payments/receipt-upload-url')
+      .send({ fileName: 'a.pdf', mime: 'application/pdf', size: 100 })
+      .expect(201);
+    await http
+      .post('/contracts/10/payments/receipt-upload-url')
+      .send({ fileName: 'a.pdf', mime: 'application/pdf', size: 11534336 })
+      .expect(400);
+    await http.patch('/contracts/10/payments/abc').send({}).expect(400);
+
+    await app.close();
+  });
 });

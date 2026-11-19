@@ -45,4 +45,9 @@ export class PaymentResponseDto {
   @Type(() => Date)
   @IsDate()
   createdAt!: Date;
+
+  @Expose()
+  @IsString()
+  @IsOptional()
+  receiptUrl?: string | null;
 }

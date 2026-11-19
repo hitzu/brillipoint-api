@@ -11,6 +11,9 @@ import { DataSource, EntityManager, In, Repository } from 'typeorm';
 
 import { Package } from '../packages/entities/package.entity';
 import { CreatePaymentDto } from '../payments/dto/create-payment.dto';
+import { CreatePaymentReceiptUploadUrlDto } from '../payments/dto/create-payment-receipt-upload-url.dto';
+import { PaymentReceiptUploadUrlDto } from '../payments/dto/payment-receipt-upload-url.dto';
+import { UpdatePaymentDto } from '../payments/dto/update-payment.dto';
 import { PaymentsService } from '../payments/payments.service';
 import { Payment } from '../payments/entities/payment.entity';
 import { Booking } from '../bookings/entities/booking.entity';
@@ -623,6 +626,40 @@ export class ContractsService {
     });
   }
 
+  private async assertPaymentsEditable(contractId: number): Promise<void> {
+    const contract = await this.contractsRepository.findOne({
+      where: { id: contractId },
+    });
+    if (!contract) {
+      throw new NotFoundException('Contract not found');
+    }
+    if (contract.status === CONTRACT_STATUS.CANCELLED) {
+      throw new ConflictException('Contract is cancelled');
+    }
+  }
+
+  async createPaymentReceiptUploadUrl(
+    contractId: number,
+    dto: CreatePaymentReceiptUploadUrlDto,
+  ): Promise<PaymentReceiptUploadUrlDto> {
+    await this.assertPaymentsEditable(contractId);
+    return await this.paymentsService.createReceiptUploadUrl(contractId, dto);
+  }
+
+  async updatePayment(
+    contractId: number,
+    paymentId: number,
+    dto: UpdatePaymentDto,
+  ): Promise<PaymentDto> {
+    await this.assertPaymentsEditable(contractId);
+    return await this.paymentsService.updatePayment(contractId, paymentId, dto);
+  }
+
+  async deletePayment(contractId: number, paymentId: number): Promise<void> {
+    await this.assertPaymentsEditable(contractId);
+    await this.paymentsService.deletePayment(contractId, paymentId);
+  }
+
   private computeBalanceDue(contract: Contract, paidAmount: number): number {
     const transport =
       contract.transportStatus === CONTRACT_TRANSPORT_STATUS.QUOTED
@@ -688,7 +725,9 @@ export class ContractsService {
         where: { contractId },
         relations: ['extra', 'extra.brand', 'promotion'],
       }),
-      this.paymentsService.listPaymentsByContract(contractId),
+      this.paymentsService
+        .listPaymentsByContract(contractId)
+        .then((list) => this.paymentsService.withReceiptUrls(list)),
       this.sumPayments(contractId),
       this.findBookingsByContractId(contractId),
     ]);
@@ -711,8 +750,9 @@ export class ContractsService {
 
   async listPayments(contractId: number): Promise<PaymentDto[]> {
     await this.getDetail(contractId);
-    const payments =
-      await this.paymentsService.listPaymentsByContract(contractId);
+    const payments = await this.paymentsService.withReceiptUrls(
+      await this.paymentsService.listPaymentsByContract(contractId),
+    );
     return plainToInstance(PaymentDto, payments, {
       excludeExtraneousValues: true,
     });
@@ -834,24 +874,27 @@ export class ContractsService {
 
     const contractId = contract.id;
 
-    const [packages, extras, payments, paidAmount, bookings] = await Promise.all([
-      this.contractPackagesRepository.find({
-        where: { contractId },
-        relations: [
-          'package',
-          'package.packageProducts',
-          'package.packageProducts.product',
-          'promotion',
-        ],
-      }),
-      this.contractExtrasRepository.find({
-        where: { contractId },
-        relations: ['extra', 'extra.brand', 'promotion'],
-      }),
-      this.paymentsService.listPaymentsByContract(contractId),
-      this.sumPayments(contractId),
-      this.findBookingsByContractId(contractId),
-    ]);
+    const [packages, extras, payments, paidAmount, bookings] =
+      await Promise.all([
+        this.contractPackagesRepository.find({
+          where: { contractId },
+          relations: [
+            'package',
+            'package.packageProducts',
+            'package.packageProducts.product',
+            'promotion',
+          ],
+        }),
+        this.contractExtrasRepository.find({
+          where: { contractId },
+          relations: ['extra', 'extra.brand', 'promotion'],
+        }),
+        this.paymentsService
+          .listPaymentsByContract(contractId)
+          .then((list) => this.paymentsService.withReceiptUrls(list)),
+        this.sumPayments(contractId),
+        this.findBookingsByContractId(contractId),
+      ]);
 
     return plainToInstance(
       ContractDetailDto,

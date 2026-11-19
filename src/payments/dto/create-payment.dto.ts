@@ -27,4 +27,8 @@ export class CreatePaymentDto {
   @IsString()
   @IsOptional()
   reference?: string;
+
+  @IsString()
+  @IsOptional()
+  receiptPath?: string | null;
 }

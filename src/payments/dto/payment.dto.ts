@@ -40,4 +40,9 @@ export class PaymentDto {
   @IsString()
   @IsOptional()
   reference!: string | null;
+
+  @Expose()
+  @IsString()
+  @IsOptional()
+  receiptUrl?: string | null;
 }

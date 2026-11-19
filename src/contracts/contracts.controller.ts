@@ -37,7 +37,10 @@ import { ContractDto } from './dto/contract.dto';
 import { ListContractsQueryDto } from './dto/list-contracts-query.dto';
 import { Public } from '../auth/decorators/public.decorator';
 import { CreatePaymentDto } from '../payments/dto/create-payment.dto';
+import { CreatePaymentReceiptUploadUrlDto } from '../payments/dto/create-payment-receipt-upload-url.dto';
 import { PaymentDto } from '../payments/dto/payment.dto';
+import { PaymentReceiptUploadUrlDto } from '../payments/dto/payment-receipt-upload-url.dto';
+import { UpdatePaymentDto } from '../payments/dto/update-payment.dto';
 import { PaymentResponseDto } from '../payments/dto/payment-response.dto';
 import { AddContractSlotDto } from './dto/add-contract-slot.dto';
 import { PatchPrepProfileAnswerDto } from './preparation-profile/dto/patch-prep-profile-answer.dto';
@@ -60,7 +63,7 @@ export class ContractsController {
     private readonly contractsService: ContractsService,
     private readonly contractsPreparationProfileService: ContractsPreparationProfileService,
     private readonly prepProfileUploadsService: PrepProfileUploadsService,
-  ) { }
+  ) {}
 
   @Post()
   @ApiBody({ type: CreateContractFromSlotsDto })
@@ -153,13 +156,15 @@ export class ContractsController {
     @Body(new ValidationPipe({ transform: true, whitelist: true }))
     dto: PatchPrepProfileAnswersBulkDto,
   ): Promise<PrepProfileDto> {
-    return await this.contractsPreparationProfileService.saveAnswersBulkByToken({
-      token,
-      phone: query.phone,
-      answers: dto.answers,
-      assets: query.assets,
-      expiresIn: query.expiresIn,
-    });
+    return await this.contractsPreparationProfileService.saveAnswersBulkByToken(
+      {
+        token,
+        phone: query.phone,
+        answers: dto.answers,
+        assets: query.assets,
+        expiresIn: query.expiresIn,
+      },
+    );
   }
 
   @Put('/public/:token/prep-profile/tattoo-designs')
@@ -292,6 +297,38 @@ export class ContractsController {
     return await this.contractsService.createPayment(id, dto);
   }
 
+  @Post(':id/payments/receipt-upload-url')
+  @ApiBody({ type: CreatePaymentReceiptUploadUrlDto })
+  @ApiOkResponse({ type: PaymentReceiptUploadUrlDto })
+  async createPaymentReceiptUploadUrl(
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ValidationPipe({ transform: true, whitelist: true }))
+    dto: CreatePaymentReceiptUploadUrlDto,
+  ): Promise<PaymentReceiptUploadUrlDto> {
+    return await this.contractsService.createPaymentReceiptUploadUrl(id, dto);
+  }
+
+  @Patch(':id/payments/:paymentId')
+  @ApiBody({ type: UpdatePaymentDto })
+  @ApiOkResponse({ type: PaymentResponseDto })
+  async updatePayment(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('paymentId', ParseIntPipe) paymentId: number,
+    @Body(new ValidationPipe({ transform: true, whitelist: true }))
+    dto: UpdatePaymentDto,
+  ): Promise<PaymentDto> {
+    return await this.contractsService.updatePayment(id, paymentId, dto);
+  }
+
+  @Delete(':id/payments/:paymentId')
+  @HttpCode(204)
+  async deletePayment(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('paymentId', ParseIntPipe) paymentId: number,
+  ): Promise<void> {
+    await this.contractsService.deletePayment(id, paymentId);
+  }
+
   @Get(':id/payments')
   @ApiOkResponse({ type: PaymentResponseDto, isArray: true })
   async listPayments(
@@ -360,5 +397,4 @@ export class ContractsController {
   removeContract(@Param('id') id: string): Promise<void> {
     return this.contractsService.removeContract(Number(id));
   }
-
 }
