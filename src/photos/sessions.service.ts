@@ -33,6 +33,7 @@ import { ConfirmPhotoDto } from './dto/confirm-photo.dto';
 import { PresignedUploadDto, PresignedUploadResponseDto } from './dto/presigned-upload.dto';
 import { PhotoResponseDto } from './dto/photo-response.dto';
 import { PhotosService } from './photos.service';
+import { SessionVideosService } from './session-videos.service';
 import { ClearedSessionsCacheCounts, SessionsCache } from './sessions.cache';
 
 const EVENT_EXPIRATION_DAYS = 15;
@@ -57,6 +58,7 @@ export class SessionsService {
     private readonly photosService: PhotosService,
     private readonly configService: ConfigService,
     private readonly cache: SessionsCache,
+    private readonly sessionVideos: SessionVideosService,
   ) { }
 
   // ── Legacy endpoints ──────────────────────────────────────────────────────────
@@ -360,6 +362,9 @@ export class SessionsService {
       },
     };
 
+    const videos = (await this.sessionVideos.listBySessionIds([session.id])).get(session.id);
+    if (videos) result.videos = videos;
+
     if (session.status === 'complete') {
       this.cache.setSession(sessionToken, result);
     }
@@ -423,6 +428,10 @@ export class SessionsService {
       (session) => session.photoCount > 0 || firstPhotoBySession.has(session.id),
     );
 
+    const videosBySession = await this.sessionVideos.listBySessionIds(
+      visibleSessions.map((s) => s.id),
+    );
+
     const result: GalleryResponseDto = {
       event: {
         eventToken: event.token ?? '',
@@ -438,6 +447,7 @@ export class SessionsService {
         sessionToken: s.sessionToken,
         coverPhoto: this.toGalleryCoverPhoto(firstPhotoBySession.get(s.id)),
         photoCount: Math.max(s.photoCount, usablePhotoCountBySession.get(s.id) ?? 0),
+        ...(videosBySession.has(s.id) ? { videos: videosBySession.get(s.id) } : {}),
       })),
     };
 

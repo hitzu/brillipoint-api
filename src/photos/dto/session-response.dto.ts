@@ -1,5 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+import { SessionVideoItemDto } from './session-video.dto';
+
 // ── Existing DTOs (legacy endpoints) ─────────────────────────────────────────
 
 export class CreateSessionResponseDto {
@@ -108,6 +110,12 @@ export class SessionResponseDto {
 
   @ApiProperty({ type: SessionEventDto })
   event!: SessionEventDto;
+
+  @ApiPropertyOptional({
+    type: [SessionVideoItemDto],
+    description: 'Present only when the session has a video',
+  })
+  videos?: SessionVideoItemDto[];
 }
 
 export class GallerySessionItemDto {
@@ -119,6 +127,12 @@ export class GallerySessionItemDto {
 
   @ApiProperty()
   photoCount!: number;
+
+  @ApiPropertyOptional({
+    type: [SessionVideoItemDto],
+    description: 'Present only when the session has a video',
+  })
+  videos?: SessionVideoItemDto[];
 }
 
 export class GalleryResponseDto {

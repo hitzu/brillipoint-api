@@ -1,0 +1,30 @@
+meta {
+  name: get video presigned urls
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{base_url}}/sessions/{{session_token}}/videos/presigned
+  body: none
+  auth: none
+}
+
+script:post-response {
+  if (!res.body?.fileId || !res.body?.video?.presignedUrl || !res.body?.poster?.presignedUrl) {
+    throw new Error('Expected fileId, video.presignedUrl and poster.presignedUrl');
+  }
+
+  bru.setVar('session_video_file_id', res.body.fileId);
+  bru.setVar('session_video_presigned_url', res.body.video.presignedUrl);
+  bru.setVar('session_video_poster_presigned_url', res.body.poster.presignedUrl);
+}
+
+vars:pre-request {
+  session_token: c1d2e3f4-0000-4000-8000-cabbccddeeff
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

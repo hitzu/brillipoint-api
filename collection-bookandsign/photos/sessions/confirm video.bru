@@ -1,0 +1,33 @@
+meta {
+  name: confirm video
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{base_url}}/sessions/{{session_token}}/videos/confirm
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "fileId": "{{session_video_file_id}}",
+    "durationMs": 3000
+  }
+}
+
+script:post-response {
+  if (res.body?.ok !== true) {
+    throw new Error('Expected { ok: true }');
+  }
+}
+
+vars:pre-request {
+  session_token: c1d2e3f4-0000-4000-8000-cabbccddeeff
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

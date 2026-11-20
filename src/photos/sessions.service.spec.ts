@@ -9,6 +9,7 @@ import { PhotoStatus } from './enums';
 import { Photo } from './entities/photo.entity';
 import { Session } from './entities/session.entity';
 import { PhotosService } from './photos.service';
+import { SessionVideosService } from './session-videos.service';
 import { SessionsCache } from './sessions.cache';
 import { SessionsService } from './sessions.service';
 
@@ -101,6 +102,7 @@ describe('SessionsService', () => {
       photosService as unknown as PhotosService,
       configService as ConfigService,
       cache as unknown as SessionsCache,
+      { listBySessionIds: jest.fn().mockResolvedValue(new Map()) } as unknown as SessionVideosService,
     );
   });
 
