@@ -1,10 +1,13 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EventAnalytic } from '../entities/event-analytic.entity';
 import { TrackActionDto } from './dto/track-action.dto';
+import { TrackContractActionDto } from './dto/track-contract-action.dto';
+import { Contract } from '../../contracts/entities/contract.entity';
 import { AnalyticsAction } from './enums/analytics-action.enum';
 import { AnalyticsSource } from './enums/analytics-source.enum';
+import { RESERVATION_ANALYTICS_SOURCE } from './enums/reservation-analytics-action.enum';
 import { EXCEPTION_RESPONSE } from '../../config/errors/exception-response.config';
 
 type AnalyticsSummaryRow = {
@@ -62,6 +65,32 @@ export class EventAnalyticsService {
     });
 
     await this.repo.save(track)
+  }
+
+  async trackForContract(
+    token: string,
+    dto: TrackContractActionDto,
+    userAgent: string,
+  ): Promise<void> {
+    const contract = await this.repo.manager.findOne(Contract, {
+      where: { token },
+      select: { id: true },
+    });
+    if (!contract) {
+      throw new NotFoundException('Contract not found');
+    }
+
+    await this.repo.save(
+      this.repo.create({
+        contractId: contract.id,
+        sessionId: dto.sessionId ?? null,
+        action: dto.action,
+        source: RESERVATION_ANALYTICS_SOURCE,
+        surface: dto.surface ?? null,
+        metadata: dto.metadata ?? null,
+        userAgent: userAgent ?? null,
+      }),
+    );
   }
 
   async getSummary(eventToken: string) {

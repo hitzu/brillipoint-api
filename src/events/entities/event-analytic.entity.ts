@@ -1,17 +1,28 @@
-import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
+import { Entity, Column, ManyToOne, JoinColumn, Index, Check } from 'typeorm';
 import { Event } from './event.entity';
+import { Contract } from '../../contracts/entities/contract.entity';
 import { BaseTimeEntity } from '../../common/entities/base-time.entity';
 import { AnalyticsSource } from '../analytics/enums/analytics-source.enum';
+import { RESERVATION_ANALYTICS_SOURCE } from '../analytics/enums/reservation-analytics-action.enum';
 
 @Entity('event_analytics')
 @Index('idx_ea_event_action_source', ['eventToken', 'action', 'source'])
+@Index('idx_ea_contract_action', ['contractId', 'action'])
+@Check('chk_ea_event_or_contract', '"event_token" IS NOT NULL OR "contract_id" IS NOT NULL')
 export class EventAnalytic extends BaseTimeEntity {
-  @Column({ name: 'event_token', type: 'uuid' })
-  eventToken: string;
+  @Column({ name: 'event_token', type: 'uuid', nullable: true })
+  eventToken: string | null;
 
   @ManyToOne(() => Event, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'event_token', referencedColumnName: 'token' })
-  event: Event;
+  event: Event | null;
+
+  @Column({ name: 'contract_id', type: 'int', nullable: true })
+  contractId: number | null;
+
+  @ManyToOne(() => Contract, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'contract_id' })
+  contract: Contract | null;
 
   @Column({ name: 'session_id', type: 'uuid', nullable: true })
   sessionId: string | null;
@@ -20,7 +31,7 @@ export class EventAnalytic extends BaseTimeEntity {
   action: string;
 
   @Column({ type: 'varchar', length: 32, nullable: true })
-  source: AnalyticsSource | null;
+  source: AnalyticsSource | typeof RESERVATION_ANALYTICS_SOURCE | null;
 
   @Column({ type: 'varchar', length: 64, nullable: true })
   surface: string | null;

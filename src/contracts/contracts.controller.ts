@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -28,6 +29,8 @@ import {
 import { AuthUser } from '../auth/decorators/auth-user.decorator';
 import { DecodedTokenDto } from '../tokens/dto/decode-token.dto';
 import { ContractsService } from './contracts.service';
+import { EventAnalyticsService } from '../events/analytics/event-analytics.service';
+import { TrackContractActionDto } from '../events/analytics/dto/track-contract-action.dto';
 import { AddItemDto } from './dto/add-item.dto';
 import { ContractDetailDto } from './dto/contract-detail.dto';
 import { CreateContractFromSlotsDto } from './dto/create-contract-from-slots.dto';
@@ -63,6 +66,7 @@ export class ContractsController {
     private readonly contractsService: ContractsService,
     private readonly contractsPreparationProfileService: ContractsPreparationProfileService,
     private readonly prepProfileUploadsService: PrepProfileUploadsService,
+    private readonly eventAnalyticsService: EventAnalyticsService,
   ) {}
 
   @Post()
@@ -100,6 +104,19 @@ export class ContractsController {
     @Param('token') token: string,
   ): Promise<ContractDetailDto> {
     return await this.contractsService.getDetailByToken(token);
+  }
+
+  @Post('/public/:token/track')
+  @HttpCode(204)
+  @ApiParam({ name: 'token', type: String })
+  @ApiBody({ type: TrackContractActionDto })
+  @Public()
+  async trackReservationAction(
+    @Param('token') token: string,
+    @Body(new ValidationPipe({ whitelist: true })) dto: TrackContractActionDto,
+    @Headers('user-agent') userAgent: string,
+  ): Promise<void> {
+    await this.eventAnalyticsService.trackForContract(token, dto, userAgent);
   }
 
   @Get('/public/:token/prep-profile')

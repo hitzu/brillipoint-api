@@ -8,11 +8,15 @@ import { EventAnalytic } from '../entities/event-analytic.entity';
 import { EventAnalyticsService } from './event-analytics.service';
 import { AnalyticsAction } from './enums/analytics-action.enum';
 import { AnalyticsSource } from './enums/analytics-source.enum';
+import { ReservationAnalyticsAction } from './enums/reservation-analytics-action.enum';
+import { ContractFactory } from '../../../test/factories/contracts/contract.factory';
+import { NotFoundException } from '@nestjs/common';
 
 describe('EventAnalyticsService', () => {
   let service: EventAnalyticsService;
   let eventFactory: EventFactory;
   let analyticFactory: EventAnalyticFactory;
+  let contractFactory: ContractFactory;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -28,6 +32,7 @@ describe('EventAnalyticsService', () => {
     service = module.get<EventAnalyticsService>(EventAnalyticsService);
     eventFactory = new EventFactory(TestDataSource);
     analyticFactory = new EventAnalyticFactory(TestDataSource);
+    contractFactory = new ContractFactory(TestDataSource);
   });
 
   describe('track', () => {
@@ -470,6 +475,74 @@ describe('EventAnalyticsService', () => {
       // Assert
       expect(result.surfaces).toHaveLength(1);
       expect(result.surfaces[0].lateArrivals).toBe(1);
+    });
+  });
+
+  describe('trackForContract', () => {
+    it('should persist a row owned by the contract with source reservation', async () => {
+      // Arrange
+      const contract = await contractFactory.create();
+      const sessionId = faker.string.uuid();
+
+      // Act
+      await service.trackForContract(
+        contract.token,
+        {
+          action: ReservationAnalyticsAction.SECTION_VIEWED,
+          sessionId,
+          surface: 'terms',
+          metadata: { trigger: 'click' },
+        },
+        'Mozilla/5.0 Test',
+      );
+
+      // Assert
+      const rows = await TestDataSource.getRepository(EventAnalytic).find({
+        where: { contractId: contract.id },
+      });
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        eventToken: null,
+        action: 'reservation_section_viewed',
+        source: 'reservation',
+        sessionId,
+        surface: 'terms',
+        metadata: { trigger: 'click' },
+        userAgent: 'Mozilla/5.0 Test',
+      });
+    });
+
+    it('should reject an unknown contract token and store nothing', async () => {
+      // Arrange
+      const unknownToken = faker.string.uuid();
+
+      // Act
+      const act = service.trackForContract(
+        unknownToken,
+        { action: ReservationAnalyticsAction.VIEWED },
+        'Mozilla/5.0 Test',
+      );
+
+      // Assert
+      await expect(act).rejects.toThrow(NotFoundException);
+      expect(await TestDataSource.getRepository(EventAnalytic).count()).toBe(0);
+    });
+
+    it('should not count contract rows in any event summary', async () => {
+      // Arrange
+      const event = await eventFactory.create();
+      const contract = await contractFactory.create();
+      await service.trackForContract(
+        contract.token,
+        { action: ReservationAnalyticsAction.VIEWED },
+        'Mozilla/5.0 Test',
+      );
+
+      // Act
+      const summary = await service.getSummary(event.token);
+
+      // Assert
+      expect(summary.totalActions).toBe(0);
     });
   });
 });

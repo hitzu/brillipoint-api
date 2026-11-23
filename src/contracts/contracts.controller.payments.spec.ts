@@ -8,6 +8,7 @@ import { ContractsController } from './contracts.controller';
 import { ContractsService } from './contracts.service';
 import { ContractsPreparationProfileService } from './preparation-profile/contracts-preparation-profile.service';
 import { PrepProfileUploadsService } from './preparation-profile/prep-profile-uploads.service';
+import { EventAnalyticsService } from '../events/analytics/event-analytics.service';
 
 describe('ContractsController (payments)', () => {
   it('allows registering a payment on an existing contract', async () => {
@@ -33,6 +34,7 @@ describe('ContractsController (payments)', () => {
         { provide: ContractsService, useValue: contractsService },
         { provide: ContractsPreparationProfileService, useValue: {} },
         { provide: PrepProfileUploadsService, useValue: {} },
+        { provide: EventAnalyticsService, useValue: {} },
       ],
     }).compile();
 
@@ -72,6 +74,7 @@ describe('ContractsController (payments)', () => {
         { provide: ContractsService, useValue: contractsService },
         { provide: ContractsPreparationProfileService, useValue: {} },
         { provide: PrepProfileUploadsService, useValue: {} },
+        { provide: EventAnalyticsService, useValue: {} },
       ],
     }).compile();
 
@@ -102,6 +105,7 @@ describe('ContractsController (payments)', () => {
         { provide: ContractsService, useValue: contractsService },
         { provide: ContractsPreparationProfileService, useValue: {} },
         { provide: PrepProfileUploadsService, useValue: {} },
+        { provide: EventAnalyticsService, useValue: {} },
       ],
     }).compile();
 
@@ -138,6 +142,7 @@ describe('ContractsController (payments)', () => {
         { provide: ContractsService, useValue: contractsService },
         { provide: ContractsPreparationProfileService, useValue: {} },
         { provide: PrepProfileUploadsService, useValue: {} },
+        { provide: EventAnalyticsService, useValue: {} },
       ],
     }).compile();
 
