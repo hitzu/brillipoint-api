@@ -9,13 +9,11 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { createClient } from '@supabase/supabase-js';
 import { plainToInstance } from 'class-transformer';
-import { randomUUID } from 'crypto';
 import { Brackets, Repository } from 'typeorm';
 import { EXCEPTION_RESPONSE } from '../config/errors/exception-response.config';
 import { ListPhotosQueryDto } from './dto/list-photos.dto';
 import { ListPhotosResponseDto } from './dto/list-photos-response.dto';
 import { PhotoResponseDto } from './dto/photo-response.dto';
-import { PresignResponseDto } from './dto/presign-response.dto';
 import { Photo } from './entities/photo.entity';
 import { Session } from './entities/session.entity';
 import { SessionsCache } from './sessions.cache';
@@ -26,15 +24,6 @@ type PhotoCursor = {
   createdAt: string;
   id: number;
 };
-
-type EventPresignUploadInput = {
-  eventToken: string;
-  fileName: string;
-  mime: string;
-  storageEnv: string;
-};
-
-type EventPresignSegment = 'personalized' | 'devoted';
 
 @Injectable()
 export class PhotosService {
@@ -203,55 +192,6 @@ export class PhotosService {
     return plainToInstance(PhotoResponseDto, saved, {
       excludeExtraneousValues: true,
     });
-  }
-
-  async createPersonalizedUploadUrl(
-    input: EventPresignUploadInput,
-  ): Promise<PresignResponseDto> {
-    return this.createEventPresignedUploadUrl(input, 'personalized');
-  }
-
-  async createDevotedUploadUrl(
-    input: EventPresignUploadInput,
-  ): Promise<PresignResponseDto> {
-    return this.createEventPresignedUploadUrl(input, 'devoted');
-  }
-
-  private async createEventPresignedUploadUrl(
-    input: EventPresignUploadInput,
-    segment: EventPresignSegment,
-  ): Promise<PresignResponseDto> {
-    if (input.mime !== 'image/jpeg') {
-      throw new BadRequestException('Only image/jpeg is allowed');
-    }
-
-    if (!['local', 'prod'].includes(input.storageEnv)) {
-      throw new BadRequestException('storageEnv must be local or prod');
-    }
-
-    const event = await this.eventsService.findOneByToken(input.eventToken);
-    const bucket = input.storageEnv;
-    const path = `${segment}/event_${event.id}/${randomUUID()}.jpg`;
-
-    const { data, error } = await this.client.storage
-      .from(bucket)
-      .createSignedUploadUrl(path);
-
-    if (error || !data?.signedUrl) {
-      throw new InternalServerErrorException('Failed to create signed upload URL');
-    }
-
-    return plainToInstance(
-      PresignResponseDto,
-      {
-        eventId: event.id,
-        bucket,
-        path,
-        signedUrl: data.signedUrl,
-        publicUrl: this.getPublicUrl(bucket, path),
-      },
-      { excludeExtraneousValues: true },
-    );
   }
 
   /**

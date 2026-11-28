@@ -25,12 +25,10 @@ import {
 } from '@nestjs/swagger';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { BulkSeedPhotosDto } from './dto/bulk-seed-photos.dto';
-import { CreatePersonalizedUploadUrlDto } from './dto/create-personalized-upload-url.dto';
 import { CreatePhotoDto } from './dto/create-photo.dto';
 import { ListPhotosQueryDto } from './dto/list-photos.dto';
 import { ListPhotosResponseDto } from './dto/list-photos-response.dto';
 import { PhotoResponseDto } from './dto/photo-response.dto';
-import { PresignResponseDto } from './dto/presign-response.dto';
 import { PhotosService } from './photos.service';
 import { Photobooth } from '../auth/decorators/photobooth.decorator';
 import { Public } from '../auth/decorators/public.decorator';
@@ -143,67 +141,5 @@ export class PhotosController {
   @ApiNotFoundResponse({ description: 'Photo not found' })
   async remove(@Param('id') id: string) {
     await this.photosService.remove(+id);
-  }
-
-  @Post('event/:eventToken/personalized/upload-url')
-  @Public()
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Generate a signed upload URL for a personalized event photo',
-  })
-  @ApiParam({
-    name: 'eventToken',
-    type: String,
-    description: 'Event token (UUID)',
-  })
-  @ApiBody({ type: CreatePersonalizedUploadUrlDto })
-  @ApiOkResponse({
-    description: 'Signed upload URL generated successfully',
-    type: PresignResponseDto,
-  })
-  @ApiBadRequestResponse({ description: 'Invalid request body' })
-  @ApiNotFoundResponse({ description: 'Event not found' })
-  presignPersonalizedUpload(
-    @Param('eventToken') eventToken: string,
-    @Body(new ValidationPipe({ transform: true, whitelist: true }))
-    dto: CreatePersonalizedUploadUrlDto,
-  ) {
-    return this.photosService.createPersonalizedUploadUrl({
-      eventToken,
-      fileName: dto.fileName,
-      mime: dto.mime,
-      storageEnv: dto.storageEnv,
-    });
-  }
-
-  @Post('event/:eventToken/devoted/upload-url')
-  @Public()
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Generate a signed upload URL for a devoted (dedicated) event photo',
-  })
-  @ApiParam({
-    name: 'eventToken',
-    type: String,
-    description: 'Event token (UUID)',
-  })
-  @ApiBody({ type: CreatePersonalizedUploadUrlDto })
-  @ApiOkResponse({
-    description: 'Signed upload URL generated successfully',
-    type: PresignResponseDto,
-  })
-  @ApiBadRequestResponse({ description: 'Invalid request body' })
-  @ApiNotFoundResponse({ description: 'Event not found' })
-  presignDevotedUpload(
-    @Param('eventToken') eventToken: string,
-    @Body(new ValidationPipe({ transform: true, whitelist: true }))
-    dto: CreatePersonalizedUploadUrlDto,
-  ) {
-    return this.photosService.createDevotedUploadUrl({
-      eventToken,
-      fileName: dto.fileName,
-      mime: dto.mime,
-      storageEnv: dto.storageEnv,
-    });
   }
 }
